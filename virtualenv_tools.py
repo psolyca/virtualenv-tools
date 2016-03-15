@@ -52,7 +52,12 @@ def update_activation_script(script_filename, new_path):
             f.writelines(lines)
 
 
-def update_script(script_filename, new_path):
+def path_is_within(path, within):
+    import os.path
+    return not os.path.relpath(path, within).startswith('.')
+
+
+def update_script(script_filename, old_path, new_path):
     """Updates shebang lines for actual scripts."""
     with open(script_filename) as f:
         lines = list(f)
@@ -65,12 +70,9 @@ def update_script(script_filename, new_path):
     if not args:
         return
 
-    if not args[0].endswith('/bin/python') or \
-       '/usr/bin/env python' in args[0]:
-        return
-
-    new_bin = os.path.join(new_path, 'bin', 'python')
-    if new_bin == args[0]:
+    if path_is_within(args[0], old_path):
+        new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+    else:
         return
 
     args[0] = new_bin
@@ -80,13 +82,13 @@ def update_script(script_filename, new_path):
         f.writelines(lines)
 
 
-def update_scripts(bin_dir, new_path):
+def update_scripts(bin_dir, orig_path, new_path):
     """Updates all scripts in the bin folder."""
     for fn in os.listdir(bin_dir):
         if fn in ACTIVATION_SCRIPTS:
             update_activation_script(os.path.join(bin_dir, fn), new_path)
         else:
-            update_script(os.path.join(bin_dir, fn), new_path)
+            update_script(os.path.join(bin_dir, fn), orig_path, new_path)
 
 
 def update_pyc(filename, new_path):
@@ -158,7 +160,7 @@ def update_local(base, new_path):
             print 'L %s' % filename
 
 
-def update_paths(base, new_path):
+def update_paths(base, orig_path, new_path):
     """Updates all paths in a virtualenv to a new one."""
     if new_path == 'auto':
         new_path = os.path.abspath(base)
@@ -183,7 +185,7 @@ def update_paths(base, new_path):
         print 'error: %s does not refer to a python installation' % base
         return False
 
-    update_scripts(bin_dir, new_path)
+    update_scripts(bin_dir, orig_path, new_path)
     update_pycs(lib_dir, new_path, lib_name)
     update_local(base, new_path)
 
@@ -235,6 +237,11 @@ def reinitialize_virtualenv(path):
     subprocess.Popen(args, env=new_env).wait()
 
 
+def get_original_path(venv_path):
+    """This helps us know whether someone has tried to relocate the virtualenv"""
+    return check_output(('sh', '-c', '. %s; printf "$VIRTUAL_ENV"' % venv_executable(venv_path, 'activate')))
+
+
 def main():
     parser = optparse.OptionParser()
     parser.add_option('--reinitialize', action='store_true',
@@ -255,7 +262,8 @@ def main():
             reinitialize_virtualenv(path)
     if options.update_path:
         for path in paths:
-            if not update_paths(path, options.update_path):
+            orig_path = get_original_path(path)
+            if not update_paths(path, orig_path, options.update_path):
                 rv = 1
     sys.exit(rv)
 
