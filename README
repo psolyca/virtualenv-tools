@@ -1,4 +1,11 @@
 
+
+  yelp patches
+  ------------
+
+    * --update now works more generally and reliably (e.g. virtualenv --python=python2.7)
+
+
   -- virtualenv-tools
 
      This repository contains scripts we're using at Fireteam for our
