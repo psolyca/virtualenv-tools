@@ -54,7 +54,8 @@ def update_activation_script(script_filename, new_path):
 
 def path_is_within(path, within):
     import os.path
-    return not os.path.relpath(path, within).startswith('.')
+    relpath = os.path.relpath(path, within)
+    return not relpath.startswith('.')
 
 
 def update_script(script_filename, old_path, new_path):
@@ -73,6 +74,8 @@ def update_script(script_filename, old_path, new_path):
     if path_is_within(args[0], old_path):
         new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
     else:
+        return
+    if new_bin == args[0]:
         return
 
     args[0] = new_bin
@@ -160,13 +163,18 @@ def update_local(base, new_path):
             print 'L %s' % filename
 
 
-def update_paths(base, orig_path, new_path):
+def update_paths(base, new_path):
     """Updates all paths in a virtualenv to a new one."""
     if new_path == 'auto':
         new_path = os.path.abspath(base)
     if not os.path.isabs(new_path):
         print 'error: %s is not an absolute path' % new_path
         return False
+
+    orig_path = get_original_path(base)
+    if new_path == orig_path:
+        print('Already up-to-date: %s' % new_path)
+        return
 
     bin_dir = os.path.join(base, 'bin')
     base_lib_dir = os.path.join(base, 'lib')
@@ -239,7 +247,14 @@ def reinitialize_virtualenv(path):
 
 def get_original_path(venv_path):
     """This helps us know whether someone has tried to relocate the virtualenv"""
-    return check_output(('sh', '-c', '. %s; printf "$VIRTUAL_ENV"' % venv_executable(venv_path, 'activate')))
+    activate_path = os.path.join(venv_path, 'bin/activate')
+
+    with open(activate_path) as activate:
+        for line in activate:
+            if line.startswith('VIRTUAL_ENV="'):
+                return line.split('"', 2)[1]
+        else:
+            raise SystemExit('Could not find VIRTUAL_ENV=" in activation script: %s' % activate_path)
 
 
 def main():
@@ -262,8 +277,7 @@ def main():
             reinitialize_virtualenv(path)
     if options.update_path:
         for path in paths:
-            orig_path = get_original_path(path)
-            if not update_paths(path, orig_path, options.update_path):
+            if not update_paths(path, options.update_path):
                 rv = 1
     sys.exit(rv)
 
