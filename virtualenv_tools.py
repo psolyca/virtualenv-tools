@@ -26,6 +26,12 @@ ACTIVATION_SCRIPTS = [
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _activation_path_re = re.compile(r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$')
+VERBOSE = False
+
+
+def debug(msg):
+    if VERBOSE:
+        print(msg)
 
 
 def update_activation_script(script_filename, new_path):
@@ -47,7 +53,7 @@ def update_activation_script(script_filename, new_path):
             changed = True
 
     if changed:
-        print 'A %s' % script_filename
+        debug('A %s' % script_filename)
         with open(script_filename, 'w') as f:
             f.writelines(lines)
 
@@ -80,25 +86,30 @@ def update_script(script_filename, old_path, new_path):
 
     args[0] = new_bin
     lines[0] = '#!%s\n' % ' '.join(args)
-    print 'S %s' % script_filename
+    debug('S %s' % script_filename)
     with open(script_filename, 'w') as f:
         f.writelines(lines)
 
 
-def update_scripts(bin_dir, orig_path, new_path):
+def update_scripts(bin_dir, orig_path, new_path, activation=False):
     """Updates all scripts in the bin folder."""
-    for fn in os.listdir(bin_dir):
-        if fn in ACTIVATION_SCRIPTS:
-            update_activation_script(os.path.join(bin_dir, fn), new_path)
-        else:
-            update_script(os.path.join(bin_dir, fn), orig_path, new_path)
+    for fname in os.listdir(bin_dir):
+        path = os.path.join(bin_dir, fname)
+        if fname in ACTIVATION_SCRIPTS and activation:
+            update_activation_script(path, new_path)
+        elif os.path.isfile(path):
+            update_script(path, orig_path, new_path)
 
 
 def update_pyc(filename, new_path):
     """Updates the filenames stored in pyc files."""
     with open(filename, 'rb') as f:
         magic = f.read(8)
-        code = marshal.load(f)
+        try:
+            code = marshal.load(f)
+        except:
+            print('Error in %s' % filename)
+            raise
 
     def _make_code(code, filename, consts):
         return CodeType(code.co_argcount, code.co_nlocals, code.co_stacksize,
@@ -108,7 +119,6 @@ def update_pyc(filename, new_path):
                         code.co_freevars, code.co_cellvars)
 
     def _process(code):
-        new_filename = new_path
         consts = []
         for const in code.co_consts:
             if type(const) is CodeType:
@@ -121,7 +131,7 @@ def update_pyc(filename, new_path):
     new_code = _process(code)
 
     if new_code is not code:
-        print 'B %s' % filename
+        debug('B %s' % filename)
         with open(filename, 'wb') as f:
             f.write(magic)
             marshal.dump(new_code, f)
@@ -129,8 +139,6 @@ def update_pyc(filename, new_path):
 
 def update_pycs(lib_dir, new_path, lib_name):
     """Walks over all pyc files and updates their paths."""
-    files = []
-
     def get_new_path(filename):
         filename = os.path.normpath(filename)
         if filename.startswith(lib_dir.rstrip('/') + '/'):
@@ -160,7 +168,7 @@ def update_local(base, new_path):
         if os.path.islink(filename) and os.readlink(filename) != target:
             os.remove(filename)
             os.symlink('../%s' % folder, filename)
-            print 'L %s' % filename
+            debug('L %s' % filename)
 
 
 def update_paths(base, new_path):
@@ -173,8 +181,8 @@ def update_paths(base, new_path):
 
     orig_path = get_original_path(base)
     if new_path == orig_path:
-        print('Already up-to-date: %s' % new_path)
-        return
+        print('Already up-to-date: %s (%s)' % (base, new_path))
+        return True
 
     bin_dir = os.path.join(base, 'bin')
     base_lib_dir = os.path.join(base, 'lib')
@@ -196,7 +204,9 @@ def update_paths(base, new_path):
     update_scripts(bin_dir, orig_path, new_path)
     update_pycs(lib_dir, new_path, lib_name)
     update_local(base, new_path)
+    update_scripts(bin_dir, orig_path, new_path, activation=True)
 
+    print 'Updated: %s (%s -> %s)' % (base, orig_path, new_path)
     return True
 
 
@@ -266,7 +276,11 @@ def main():
                       'required executables and helper files that are '
                       'supported to the new python prefix.  You can also set '
                       'this to "auto" for autodetection.')
+    parser.add_option('--verbose', action='store_true',
+                      help='show a listing of changes')
     options, paths = parser.parse_args()
+    global VERBOSE
+    VERBOSE = options.verbose
     if not paths:
         paths = ['.']
 
@@ -275,10 +289,12 @@ def main():
     if options.reinitialize:
         for path in paths:
             reinitialize_virtualenv(path)
-    if options.update_path:
+    elif options.update_path:
         for path in paths:
             if not update_paths(path, options.update_path):
                 rv = 1
+    else:
+        parser.print_help()
     sys.exit(rv)
 
 
