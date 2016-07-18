@@ -1,0 +1,11 @@
+Manually tested, for now:
+
+ 1. no arguments prints help
+ 1. only one line of output by default
+ 1. show all changes with --verbose
+ 1. change is quick-idempotent
+ 1. idempotent change is success
+ 1. bad pyc file shows which file is bad
+ 1. bad symlink doesn't explode
+ 1. directory in bin/ doesn't explode
+ 1. failure results in retry on subsequent run
