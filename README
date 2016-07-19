@@ -3,6 +3,18 @@
   yelp patches
   ------------
 
+### yelp3
+
+    * default output much more concise, added a --verbose option
+    * improved fault tolerance, in the case of:
+        * corrupt pyc files
+        * broken symlinks
+        * unexpected directories
+    * no-changes-needed is a success case (idempotency exits 0)
+
+
+### yelp1
+
     * --update now works more generally and reliably (e.g. virtualenv --python=python2.7)
 
 
