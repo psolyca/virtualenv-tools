@@ -1,6 +1,25 @@
+import os.path
+import pipes
+import shutil
+import subprocess
+import sys
+
 import pytest
 
 import virtualenv_tools
+
+
+def venv(path):
+    subprocess.check_call((sys.executable, '-m', 'virtualenv', path))
+
+
+def activated_sys_executable(path):
+    return subprocess.check_output((
+        'bash', '-c',
+        ". {} && python -c 'import sys; print(sys.executable)'".format(
+            pipes.quote(os.path.join(path, 'bin/activate')),
+        )
+    )).decode('UTF-8').strip()
 
 
 @pytest.mark.parametrize('helpargs', ([], ['--help']))
@@ -9,3 +28,25 @@ def test_help(capsys, helpargs):
         virtualenv_tools.main(helpargs)
     out, _ = capsys.readouterr()
     assert 'Usage: ' in out
+
+
+def test_already_up_to_date(tmpdir, capsys):
+    path = tmpdir.join('venv').strpath
+    venv(path)
+    ret = virtualenv_tools.main(['--update-path={}'.format(path), path])
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert out == 'Already up-to-date: {} ({})\n'.format(path, path)
+
+
+def test_move(tmpdir, capsys):
+    before = tmpdir.join('before').strpath
+    after = tmpdir.join('after').strpath
+    venv(before)
+    ret = virtualenv_tools.main(['--update-path={}'.format(after), before])
+    out, _ = capsys.readouterr()
+    assert ret == 0
+    assert out == 'Updated: {} ({} -> {})\n'.format(before, before, after)
+    shutil.move(before, after)
+    exe = activated_sys_executable(after)
+    assert exe == os.path.join(after, 'bin/python')
