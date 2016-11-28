@@ -118,11 +118,22 @@ def update_pyc(filename, new_path):
             raise
 
     def _make_code(code, filename, consts):
-        return CodeType(code.co_argcount, code.co_nlocals, code.co_stacksize,
-                        code.co_flags, code.co_code, tuple(consts),
-                        code.co_names, code.co_varnames, filename,
-                        code.co_name, code.co_firstlineno, code.co_lnotab,
-                        code.co_freevars, code.co_cellvars)
+        if sys.version_info[0] == 2:  # pragma: no cover (PY2)
+            arglist = [
+                code.co_argcount, code.co_nlocals, code.co_stacksize,
+                code.co_flags, code.co_code, tuple(consts), code.co_names,
+                code.co_varnames, filename, code.co_name, code.co_firstlineno,
+                code.co_lnotab, code.co_freevars, code.co_cellvars,
+            ]
+        else:  # pragma: no cover (PY3)
+            arglist = [
+                code.co_argcount, code.co_kwonlyargcount, code.co_nlocals,
+                code.co_stacksize, code.co_flags, code.co_code, tuple(consts),
+                code.co_names, code.co_varnames, filename, code.co_name,
+                code.co_firstlineno, code.co_lnotab, code.co_freevars,
+                code.co_cellvars,
+            ]
+        return CodeType(*arglist)
 
     def _process(code):
         consts = []
