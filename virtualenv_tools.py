@@ -10,6 +10,8 @@
     :copyright: (c) 2012 by Fireteam Ltd.
     :license: BSD, see LICENSE for more details.
 """
+from __future__ import print_function
+
 import os
 import re
 import sys
@@ -176,7 +178,7 @@ def update_paths(base, new_path):
     if new_path == 'auto':
         new_path = os.path.abspath(base)
     if not os.path.isabs(new_path):
-        print 'error: %s is not an absolute path' % new_path
+        print('error: %s is not an absolute path' % new_path)
         return False
 
     orig_path = get_original_path(base)
@@ -198,7 +200,7 @@ def update_paths(base, new_path):
 
     if lib_dir is None or not os.path.isdir(bin_dir) \
        or not os.path.isfile(os.path.join(bin_dir, 'python')):
-        print 'error: %s does not refer to a python installation' % base
+        print('error: %s does not refer to a python installation' % base)
         return False
 
     update_scripts(bin_dir, orig_path, new_path)
@@ -206,7 +208,7 @@ def update_paths(base, new_path):
     update_local(base, new_path)
     update_scripts(bin_dir, orig_path, new_path, activation=True)
 
-    print 'Updated: %s (%s -> %s)' % (base, orig_path, new_path)
+    print('Updated: %s (%s -> %s)' % (base, orig_path, new_path))
     return True
 
 
@@ -214,7 +216,7 @@ def reinitialize_virtualenv(path):
     """Re-initializes a virtualenv."""
     lib_dir = os.path.join(path, 'lib')
     if not os.path.isdir(lib_dir):
-        print 'error: %s is not a virtualenv bin folder' % path
+        print('error: %s is not a virtualenv bin folder' % path)
         return False
 
     py_ver = None
@@ -224,15 +226,17 @@ def reinitialize_virtualenv(path):
             break
 
     if py_ver is None:
-        print 'error: could not detect python version of virtualenv %s' % path
+        print('error: could not detect python version of virtualenv %s' % path)
         return False
 
     sys_py_executable = subprocess.Popen(['which', py_ver],
         stdout=subprocess.PIPE).communicate()[0].strip()
 
     if not sys_py_executable:
-        print 'error: could not find system version for expected python ' \
+        print(
+            'error: could not find system version for expected python '
             'version %s' % py_ver
+        )
         return False
 
     lib_dir = os.path.join(path, 'lib', py_ver)
