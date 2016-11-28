@@ -14,7 +14,6 @@ from __future__ import print_function
 
 import os
 import re
-import sys
 import marshal
 import optparse
 import subprocess
@@ -271,7 +270,7 @@ def get_original_path(venv_path):
             raise SystemExit('Could not find VIRTUAL_ENV=" in activation script: %s' % activate_path)
 
 
-def main():
+def main(argv=None):
     parser = optparse.OptionParser()
     parser.add_option('--reinitialize', action='store_true',
                       help='Updates the python installation '
@@ -282,7 +281,7 @@ def main():
                       'this to "auto" for autodetection.')
     parser.add_option('--verbose', action='store_true',
                       help='show a listing of changes')
-    options, paths = parser.parse_args()
+    options, paths = parser.parse_args(argv)
     global VERBOSE
     VERBOSE = options.verbose
     if not paths:
@@ -298,9 +297,9 @@ def main():
             if not update_paths(path, options.update_path):
                 rv = 1
     else:
-        parser.print_help()
-    sys.exit(rv)
+        parser.parse_args(['--help'])
+    return rv
 
 
 if __name__ == '__main__':
-    main()
+    exit(main())
