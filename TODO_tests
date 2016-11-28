@@ -1,5 +1,3 @@
 Manually tested, for now:
 
  1. show all changes with --verbose
- 1. bad symlink doesn't explode
- 1. directory in bin/ doesn't explode

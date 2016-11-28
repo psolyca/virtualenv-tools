@@ -66,3 +66,25 @@ def test_bad_pyc(tmpdir, capsys):
             virtualenv_tools.main(['--update-path={}'.format(after), before])
         out, _ = capsys.readouterr()
         assert out == 'Error in {}\n'.format(bad_pyc.strpath)
+
+
+def test_dir_in_bin_ok(tmpdir):
+    before_dir = tmpdir.join('before')
+    before = before_dir.strpath
+    after = tmpdir.join('after').strpath
+    venv(before)
+    before_dir.join('bin', 'im_a_directory').ensure_dir()
+    # Successful
+    ret = virtualenv_tools.main(['--update-path={}'.format(after), before])
+    assert ret == 0
+
+
+def test_broken_symlink_ok(tmpdir):
+    before_dir = tmpdir.join('before')
+    before = before_dir.strpath
+    after = tmpdir.join('after').strpath
+    venv(before)
+    before_dir.join('bin', 'bad_symlink').mksymlinkto('/i/dont/exist')
+    # Successful
+    ret = virtualenv_tools.main(['--update-path={}'.format(after), before])
+    assert ret == 0
