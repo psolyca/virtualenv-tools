@@ -88,3 +88,17 @@ def test_broken_symlink_ok(tmpdir):
     # Successful
     ret = virtualenv_tools.main(['--update-path={}'.format(after), before])
     assert ret == 0
+
+
+def test_verbose(tmpdir, capsys):
+    before = tmpdir.join('before').strpath
+    after = tmpdir.join('after').strpath
+    venv(before)
+    ret = virtualenv_tools.main([
+        '--update-path={}'.format(after), before,
+        '--verbose',
+    ])
+    assert ret == 0
+    out, _ = capsys.readouterr()
+    # Lots of output
+    assert len(out.splitlines()) > 50
