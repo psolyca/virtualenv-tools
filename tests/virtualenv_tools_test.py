@@ -1,6 +1,5 @@
-import os.path
+import collections
 import pipes
-import shutil
 import subprocess
 import sys
 
@@ -9,15 +8,28 @@ import pytest
 import virtualenv_tools
 
 
-def venv(path):
-    subprocess.check_call((sys.executable, '-m', 'virtualenv', path))
+@pytest.yield_fixture
+def venv(tmpdir):
+    before = tmpdir.join('before')
+    after = tmpdir.join('after')
+    cmd = (sys.executable, '-m', 'virtualenv', before.strpath)
+    subprocess.check_call(cmd)
+    yield collections.namedtuple('ns', ('before', 'after'))(before, after)
+
+
+def run(before, after, args=None):
+    args = args or []
+    ret = virtualenv_tools.main(
+        [before.strpath, '--update-path={}'.format(after.strpath)] + args,
+    )
+    assert ret == 0
 
 
 def activated_sys_executable(path):
     return subprocess.check_output((
         'bash', '-c',
         ". {} && python -c 'import sys; print(sys.executable)'".format(
-            pipes.quote(os.path.join(path, 'bin/activate')),
+            pipes.quote(path.join('bin/activate').strpath),
         )
     )).decode('UTF-8').strip()
 
@@ -30,75 +42,46 @@ def test_help(capsys, helpargs):
     assert 'Usage: ' in out
 
 
-def test_already_up_to_date(tmpdir, capsys):
-    path = tmpdir.join('venv').strpath
-    venv(path)
-    ret = virtualenv_tools.main(['--update-path={}'.format(path), path])
+def test_already_up_to_date(venv, capsys):
+    run(venv.before, venv.before)
     out, _ = capsys.readouterr()
-    assert ret == 0
-    assert out == 'Already up-to-date: {} ({})\n'.format(path, path)
+    assert out == 'Already up-to-date: {0} ({0})\n'.format(venv.before)
 
 
-def test_move(tmpdir, capsys):
-    before = tmpdir.join('before').strpath
-    after = tmpdir.join('after').strpath
-    venv(before)
-    ret = virtualenv_tools.main(['--update-path={}'.format(after), before])
+def test_move(venv, capsys):
+    run(venv.before, venv.after)
     out, _ = capsys.readouterr()
-    assert ret == 0
-    assert out == 'Updated: {} ({} -> {})\n'.format(before, before, after)
-    shutil.move(before, after)
-    exe = activated_sys_executable(after)
-    assert exe == os.path.join(after, 'bin/python')
+    expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert out == expected
+    venv.before.move(venv.after)
+    exe = activated_sys_executable(venv.after)
+    assert exe == venv.after.join('bin/python').strpath
 
 
-def test_bad_pyc(tmpdir, capsys):
-    before_dir = tmpdir.join('before')
-    before = before_dir.strpath
-    after = tmpdir.join('after').strpath
-    venv(before)
+def test_bad_pyc(venv, capsys):
     libdir = 'lib/python{}.{}'.format(*sys.version_info[:2])
-    bad_pyc = before_dir.join(libdir, 'bad.pyc')
+    bad_pyc = venv.before.join(libdir, 'bad.pyc')
     bad_pyc.write_binary(b'I am a very naughty pyc\n')
     # Retries on failures as well
     for _ in range(2):
         with pytest.raises(ValueError):
-            virtualenv_tools.main(['--update-path={}'.format(after), before])
+            run(venv.before, venv.after)
         out, _ = capsys.readouterr()
         assert out == 'Error in {}\n'.format(bad_pyc.strpath)
 
 
-def test_dir_in_bin_ok(tmpdir):
-    before_dir = tmpdir.join('before')
-    before = before_dir.strpath
-    after = tmpdir.join('after').strpath
-    venv(before)
-    before_dir.join('bin', 'im_a_directory').ensure_dir()
-    # Successful
-    ret = virtualenv_tools.main(['--update-path={}'.format(after), before])
-    assert ret == 0
+def test_dir_in_bin_ok(venv):
+    venv.before.join('bin', 'im_a_directory').ensure_dir()
+    run(venv.before, venv.after)
 
 
-def test_broken_symlink_ok(tmpdir):
-    before_dir = tmpdir.join('before')
-    before = before_dir.strpath
-    after = tmpdir.join('after').strpath
-    venv(before)
-    before_dir.join('bin', 'bad_symlink').mksymlinkto('/i/dont/exist')
-    # Successful
-    ret = virtualenv_tools.main(['--update-path={}'.format(after), before])
-    assert ret == 0
+def test_broken_symlink_ok(venv):
+    venv.before.join('bin', 'bad_symlink').mksymlinkto('/i/dont/exist')
+    run(venv.before, venv.after)
 
 
-def test_verbose(tmpdir, capsys):
-    before = tmpdir.join('before').strpath
-    after = tmpdir.join('after').strpath
-    venv(before)
-    ret = virtualenv_tools.main([
-        '--update-path={}'.format(after), before,
-        '--verbose',
-    ])
-    assert ret == 0
+def test_verbose(venv, capsys):
+    run(venv.before, venv.after, args=['--verbose'])
     out, _ = capsys.readouterr()
     # Lots of output
     assert len(out.splitlines()) > 50
