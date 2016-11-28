@@ -14,9 +14,10 @@ from __future__ import print_function
 
 import marshal
 import optparse
-import os
+import os.path
 import re
 import subprocess
+import sys
 from types import CodeType
 
 
@@ -30,6 +31,10 @@ _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$',
 )
 VERBOSE = False
+MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
+# In python3.3, a 4 byte "size" hint was added to pyc files
+if sys.version_info >= (3, 3):  # pragma: no cover (PY33+)
+    MAGIC_LENGTH += 4
 
 
 def debug(msg):
@@ -62,20 +67,18 @@ def update_activation_script(script_filename, new_path):
 
 
 def path_is_within(path, within):
-    import os.path
     relpath = os.path.relpath(path, within)
     return not relpath.startswith('.')
 
 
 def update_script(script_filename, old_path, new_path):
     """Updates shebang lines for actual scripts."""
+    with open(script_filename, 'rb') as f:
+        if f.read(2) != b'#!':
+            return
+
     with open(script_filename) as f:
         lines = list(f)
-    if not lines:
-        return
-
-    if not lines[0].startswith('#!'):
-        return
     args = lines[0][2:].strip().split()
     if not args:
         return
@@ -107,10 +110,10 @@ def update_scripts(bin_dir, orig_path, new_path, activation=False):
 def update_pyc(filename, new_path):
     """Updates the filenames stored in pyc files."""
     with open(filename, 'rb') as f:
-        magic = f.read(8)
+        magic = f.read(MAGIC_LENGTH)
         try:
             code = marshal.load(f)
-        except:
+        except Exception:
             print('Error in %s' % filename)
             raise
 
