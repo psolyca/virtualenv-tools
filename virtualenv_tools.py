@@ -12,10 +12,10 @@
 """
 from __future__ import print_function
 
-import os
-import re
 import marshal
 import optparse
+import os
+import re
 import subprocess
 from types import CodeType
 
@@ -26,7 +26,9 @@ ACTIVATION_SCRIPTS = [
     'activate.fish'
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
-_activation_path_re = re.compile(r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$')
+_activation_path_re = re.compile(
+    r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$',
+)
 VERBOSE = False
 
 
@@ -228,8 +230,9 @@ def reinitialize_virtualenv(path):
         print('error: could not detect python version of virtualenv %s' % path)
         return False
 
-    sys_py_executable = subprocess.Popen(['which', py_ver],
-        stdout=subprocess.PIPE).communicate()[0].strip()
+    sys_py_executable = subprocess.Popen(
+        ['which', py_ver], stdout=subprocess.PIPE,
+    ).communicate()[0].strip()
 
     if not sys_py_executable:
         print(
@@ -241,8 +244,9 @@ def reinitialize_virtualenv(path):
     lib_dir = os.path.join(path, 'lib', py_ver)
 
     args = ['virtualenv', '-p', sys_py_executable]
-    if not os.path.isfile(os.path.join(lib_dir,
-            'no-global-site-packages.txt')):
+    if not os.path.isfile(os.path.join(
+            lib_dir, 'no-global-site-packages.txt',
+    )):
         args.append('--system-site-packages')
 
     for filename in os.listdir(lib_dir):
@@ -259,7 +263,9 @@ def reinitialize_virtualenv(path):
 
 
 def get_original_path(venv_path):
-    """This helps us know whether someone has tried to relocate the virtualenv"""
+    """This helps us know whether someone has tried to relocate the
+    virtualenv
+    """
     activate_path = os.path.join(venv_path, 'bin/activate')
 
     with open(activate_path) as activate:
@@ -267,7 +273,10 @@ def get_original_path(venv_path):
             if line.startswith('VIRTUAL_ENV="'):
                 return line.split('"', 2)[1]
         else:
-            raise SystemExit('Could not find VIRTUAL_ENV=" in activation script: %s' % activate_path)
+            raise SystemExit(
+                'Could not find VIRTUAL_ENV=" in activation script: %s' %
+                activate_path
+            )
 
 
 def main(argv=None):
