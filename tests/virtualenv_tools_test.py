@@ -50,3 +50,19 @@ def test_move(tmpdir, capsys):
     shutil.move(before, after)
     exe = activated_sys_executable(after)
     assert exe == os.path.join(after, 'bin/python')
+
+
+def test_bad_pyc(tmpdir, capsys):
+    before_dir = tmpdir.join('before')
+    before = before_dir.strpath
+    after = tmpdir.join('after').strpath
+    venv(before)
+    libdir = 'lib/python{}.{}'.format(*sys.version_info[:2])
+    bad_pyc = before_dir.join(libdir, 'bad.pyc')
+    bad_pyc.write_binary(b'I am a very naughty pyc\n')
+    # Retries on failures as well
+    for _ in range(2):
+        with pytest.raises(ValueError):
+            virtualenv_tools.main(['--update-path={}'.format(after), before])
+        out, _ = capsys.readouterr()
+        assert out == 'Error in {}\n'.format(bad_pyc.strpath)
