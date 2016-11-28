@@ -1,6 +1,5 @@
 Manually tested, for now:
 
- 1. no arguments prints help
  1. only one line of output by default
  1. show all changes with --verbose
  1. change is quick-idempotent
