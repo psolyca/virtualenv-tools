@@ -17,10 +17,9 @@ def venv(tmpdir):
     yield collections.namedtuple('ns', ('before', 'after'))(before, after)
 
 
-def run(before, after, args=None):
-    args = args or []
+def run(before, after, args=()):
     ret = virtualenv_tools.main(
-        [before.strpath, '--update-path={}'.format(after.strpath)] + args,
+        (before.strpath, '--update-path={}'.format(after.strpath)) + args,
     )
     assert ret == 0
 
@@ -34,12 +33,12 @@ def activated_sys_executable(path):
     )).decode('UTF-8').strip()
 
 
-@pytest.mark.parametrize('helpargs', ([], ['--help']))
+@pytest.mark.parametrize('helpargs', ((), ('--help',)))
 def test_help(capsys, helpargs):
     with pytest.raises(SystemExit):
         virtualenv_tools.main(helpargs)
-    out, _ = capsys.readouterr()
-    assert 'Usage: ' in out
+    out, err = capsys.readouterr()
+    assert 'usage: ' in out + err
 
 
 def test_already_up_to_date(venv, capsys):
@@ -48,12 +47,39 @@ def test_already_up_to_date(venv, capsys):
     assert out == 'Already up-to-date: {0} ({0})\n'.format(venv.before)
 
 
+def test_each_part_idempotent(tmpdir, venv, capsys):
+    activate = venv.before.join('bin/activate')
+    before_activate_contents = activate.read()
+    run(venv.before, venv.after)
+    capsys.readouterr()
+    # Write the activate file to trick the logic into rerunning
+    activate.write(before_activate_contents)
+    run(venv.before, venv.after, args=('--verbose',))
+    out, _ = capsys.readouterr()
+    # Should only update our activate file:
+    expected = 'A {0}\nUpdated: {1} ({1} -> {2})\n'.format(
+        activate, venv.before, venv.after,
+    )
+    assert out == expected
+
+
 def test_move(venv, capsys):
     run(venv.before, venv.after)
     out, _ = capsys.readouterr()
     expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
     assert out == expected
     venv.before.move(venv.after)
+    exe = activated_sys_executable(venv.after)
+    assert exe == venv.after.join('bin/python').strpath
+
+
+def test_move_with_auto(venv, capsys):
+    venv.before.move(venv.after)
+    ret = virtualenv_tools.main(('--update-path=auto', venv.after.strpath))
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert ret == 0
+    assert out == expected
     exe = activated_sys_executable(venv.after)
     assert exe == venv.after.join('bin/python').strpath
 
@@ -70,18 +96,67 @@ def test_bad_pyc(venv, capsys):
         assert out == 'Error in {}\n'.format(bad_pyc.strpath)
 
 
-def test_dir_in_bin_ok(venv):
-    venv.before.join('bin', 'im_a_directory').ensure_dir()
-    run(venv.before, venv.after)
-
-
-def test_broken_symlink_ok(venv):
-    venv.before.join('bin', 'bad_symlink').mksymlinkto('/i/dont/exist')
+def test_dir_oddities(venv):
+    bindir = venv.before.join('bin')
+    # A directory existing in the bin dir
+    bindir.join('im_a_directory').ensure_dir()
+    # A broken symlink
+    bindir.join('bad_symlink').mksymlinkto('/i/dont/exist')
+    # A file with a shebang-looking start, but not actually
+    bindir.join('not-an-exe').write('#!\nohai')
     run(venv.before, venv.after)
 
 
 def test_verbose(venv, capsys):
-    run(venv.before, venv.after, args=['--verbose'])
+    run(venv.before, venv.after, args=('--verbose',))
     out, _ = capsys.readouterr()
     # Lots of output
     assert len(out.splitlines()) > 50
+
+
+def test_non_absolute_error(capsys):
+    ret = virtualenv_tools.main(('--update-path', 'notabs'))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    assert out == '--update-path must be absolute: notabs\n'
+
+
+@pytest.yield_fixture
+def fake_venv(tmpdir):
+    tmpdir.join('bin').ensure_dir()
+    tmpdir.join('lib/python2.7').ensure_dir()
+    tmpdir.join('bin/activate').write('VIRTUAL_ENV=/venv')
+    yield tmpdir
+
+
+def test_not_a_virtualenv_missing_bindir(fake_venv, capsys):
+    fake_venv.join('bin').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_venv, fake_venv.join('bin'),
+    )
+    assert out == expected
+
+
+def test_not_a_virtualenv_missing_activate_file(fake_venv, capsys):
+    fake_venv.join('bin/activate').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a file: {}\n'.format(
+        fake_venv, fake_venv.join('bin/activate'),
+    )
+    assert out == expected
+
+
+def test_not_a_virtualenv_missing_versioned_lib_directory(fake_venv, capsys):
+    fake_venv.join('lib/python2.7').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_venv, fake_venv.join('lib/python#.#'),
+    )
+    assert out == expected

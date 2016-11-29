@@ -5,18 +5,19 @@
 
     A helper script that moves virtualenvs to a new location.
 
-    It only supports POSIX based virtualenvs and Python 2 at the moment.
+    It only supports POSIX based virtualenvs and at the moment.
 
     :copyright: (c) 2012 by Fireteam Ltd.
     :license: BSD, see LICENSE for more details.
 """
 from __future__ import print_function
 
+import argparse
+import collections
 import marshal
-import optparse
 import os.path
 import re
-import subprocess
+import shutil
 import sys
 from types import CodeType
 
@@ -87,8 +88,6 @@ def update_script(script_filename, old_path, new_path):
         new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
     else:
         return
-    if new_bin == args[0]:
-        return
 
     args[0] = new_bin
     lines[0] = '#!%s\n' % ' '.join(args)
@@ -154,129 +153,40 @@ def update_pyc(filename, new_path):
             marshal.dump(new_code, f)
 
 
-def update_pycs(lib_dir, new_path, lib_name):
+def update_pycs(lib_dir, new_path):
     """Walks over all pyc files and updates their paths."""
     def get_new_path(filename):
         filename = os.path.normpath(filename)
-        if filename.startswith(lib_dir.rstrip('/') + '/'):
-            return os.path.join(new_path, filename[len(lib_dir) + 1:])
+        return os.path.join(new_path, filename[len(lib_dir) + 1:])
 
     for dirname, dirnames, filenames in os.walk(lib_dir):
         for filename in filenames:
             if filename.endswith(('.pyc', '.pyo')):
                 filename = os.path.join(dirname, filename)
                 local_path = get_new_path(filename)
-                if local_path is not None:
-                    update_pyc(filename, local_path)
+                update_pyc(filename, local_path)
 
 
-def update_local(base, new_path):
+def remove_local(base):
     """On some systems virtualenv seems to have something like a local
-    directory with symlinks.  It appears to happen on debian systems and
-    it causes havok if not updated.  So do that.
+    directory with symlinks.  This directory is safe to remove in modern
+    versions of virtualenv.  Delete it.
     """
     local_dir = os.path.join(base, 'local')
-    if not os.path.isdir(local_dir):
-        return
-
-    for folder in 'bin', 'lib', 'include':
-        filename = os.path.join(local_dir, folder)
-        target = '../%s' % folder
-        if os.path.islink(filename) and os.readlink(filename) != target:
-            os.remove(filename)
-            os.symlink('../%s' % folder, filename)
-            debug('L %s' % filename)
+    if os.path.exists(local_dir):  # pragma: no cover (not all systems)
+        debug('D {}'.format(local_dir))
+        shutil.rmtree(local_dir)
 
 
-def update_paths(base, new_path):
+def update_paths(venv, new_path):
     """Updates all paths in a virtualenv to a new one."""
-    if new_path == 'auto':
-        new_path = os.path.abspath(base)
-    if not os.path.isabs(new_path):
-        print('error: %s is not an absolute path' % new_path)
-        return False
-
-    orig_path = get_original_path(base)
-    if new_path == orig_path:
-        print('Already up-to-date: %s (%s)' % (base, new_path))
-        return True
-
-    bin_dir = os.path.join(base, 'bin')
-    base_lib_dir = os.path.join(base, 'lib')
-    lib_dir = None
-    lib_name = None
-
-    if os.path.isdir(base_lib_dir):
-        for folder in os.listdir(base_lib_dir):
-            if _pybin_match.match(folder):
-                lib_name = folder
-                lib_dir = os.path.join(base_lib_dir, folder)
-                break
-
-    if lib_dir is None or not os.path.isdir(bin_dir) \
-       or not os.path.isfile(os.path.join(bin_dir, 'python')):
-        print('error: %s does not refer to a python installation' % base)
-        return False
-
-    update_scripts(bin_dir, orig_path, new_path)
-    update_pycs(lib_dir, new_path, lib_name)
-    update_local(base, new_path)
-    update_scripts(bin_dir, orig_path, new_path, activation=True)
-
-    print('Updated: %s (%s -> %s)' % (base, orig_path, new_path))
-    return True
+    update_scripts(venv.bin_dir, venv.orig_path, new_path)
+    update_pycs(venv.lib_dir, new_path)
+    remove_local(venv.path)
+    update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
 
-def reinitialize_virtualenv(path):
-    """Re-initializes a virtualenv."""
-    lib_dir = os.path.join(path, 'lib')
-    if not os.path.isdir(lib_dir):
-        print('error: %s is not a virtualenv bin folder' % path)
-        return False
-
-    py_ver = None
-    for filename in os.listdir(lib_dir):
-        if _pybin_match.match(filename):
-            py_ver = filename
-            break
-
-    if py_ver is None:
-        print('error: could not detect python version of virtualenv %s' % path)
-        return False
-
-    sys_py_executable = subprocess.Popen(
-        ['which', py_ver], stdout=subprocess.PIPE,
-    ).communicate()[0].strip()
-
-    if not sys_py_executable:
-        print(
-            'error: could not find system version for expected python '
-            'version %s' % py_ver
-        )
-        return False
-
-    lib_dir = os.path.join(path, 'lib', py_ver)
-
-    args = ['virtualenv', '-p', sys_py_executable]
-    if not os.path.isfile(os.path.join(
-            lib_dir, 'no-global-site-packages.txt',
-    )):
-        args.append('--system-site-packages')
-
-    for filename in os.listdir(lib_dir):
-        if filename.startswith('distribute-') and \
-           filename.endswith('.egg'):
-            args.append('--distribute')
-
-    new_env = {}
-    for key, value in os.environ.items():
-        if not key.startswith('VIRTUALENV_'):
-            new_env[key] = value
-    args.append(path)
-    subprocess.Popen(args, env=new_env).wait()
-
-
-def get_original_path(venv_path):
+def get_orig_path(venv_path):
     """This helps us know whether someone has tried to relocate the
     virtualenv
     """
@@ -287,41 +197,93 @@ def get_original_path(venv_path):
             if line.startswith('VIRTUAL_ENV="'):
                 return line.split('"', 2)[1]
         else:
-            raise SystemExit(
+            raise AssertionError(
                 'Could not find VIRTUAL_ENV=" in activation script: %s' %
                 activate_path
             )
 
 
+class NotAVirtualenvError(OSError):
+    def __init__(self, *args):
+        self.args = args
+
+    def __str__(self):
+        return '{} is not a virtualenv: not a {}: {}'.format(*self.args)
+
+
+Virtualenv = collections.namedtuple(
+    'Virtualenv', ('path', 'bin_dir', 'lib_dir', 'orig_path'),
+)
+
+
+def _get_original_state(path):
+    bin_dir = os.path.join(path, 'bin')
+    base_lib_dir = os.path.join(path, 'lib')
+    activate_file = os.path.join(bin_dir, 'activate')
+
+    for dir_path in (bin_dir, base_lib_dir):
+        if not os.path.isdir(dir_path):
+            raise NotAVirtualenvError(path, 'directory', dir_path)
+    if not os.path.isfile(activate_file):
+        raise NotAVirtualenvError(path, 'file', activate_file)
+
+    lib_dirs = [
+        os.path.join(base_lib_dir, potential_lib_dir)
+        for potential_lib_dir in os.listdir(base_lib_dir)
+        if _pybin_match.match(potential_lib_dir)
+    ]
+    if len(lib_dirs) != 1:
+        raise NotAVirtualenvError(
+            path, 'directory', os.path.join(base_lib_dir, 'python#.#'),
+        )
+    lib_dir, = lib_dirs
+
+    orig_path = get_orig_path(path)
+    return Virtualenv(path, bin_dir, lib_dir, orig_path)
+
+
 def main(argv=None):
-    parser = optparse.OptionParser()
-    parser.add_option('--reinitialize', action='store_true',
-                      help='Updates the python installation '
-                      'and reinitializes the virtualenv.')
-    parser.add_option('--update-path', help='Update the path for all '
-                      'required executables and helper files that are '
-                      'supported to the new python prefix.  You can also set '
-                      'this to "auto" for autodetection.')
-    parser.add_option('--verbose', action='store_true',
-                      help='show a listing of changes')
-    options, paths = parser.parse_args(argv)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--update-path',
+        required=True,
+        help=(
+            'Update the path for all required executables and helper files '
+            'that are supported to the new python prefix.  You can also set '
+            'this to "auto" for autodetection.'
+        ),
+    )
+    parser.add_argument(
+        '--verbose', action='store_true', help='show a listing of changes',
+    )
+    parser.add_argument('path', default='.', nargs='?')
+    args = parser.parse_args(argv)
+
     global VERBOSE
-    VERBOSE = options.verbose
-    if not paths:
-        paths = ['.']
+    VERBOSE = args.verbose
 
-    rv = 0
-
-    if options.reinitialize:
-        for path in paths:
-            reinitialize_virtualenv(path)
-    elif options.update_path:
-        for path in paths:
-            if not update_paths(path, options.update_path):
-                rv = 1
+    if args.update_path == 'auto':
+        update_path = os.path.abspath(args.path)
     else:
-        parser.parse_args(['--help'])
-    return rv
+        update_path = args.update_path
+
+    if not os.path.isabs(update_path):
+        print('--update-path must be absolute: {}'.format(update_path))
+        return 1
+
+    try:
+        venv = _get_original_state(args.path)
+    except NotAVirtualenvError as e:
+        print(e)
+        return 1
+
+    if venv.orig_path == update_path:
+        print('Already up-to-date: %s (%s)' % (venv.path, update_path))
+        return 0
+
+    update_paths(venv, update_path)
+    print('Updated: %s (%s -> %s)' % (venv.path, venv.orig_path, update_path))
+    return 0
 
 
 if __name__ == '__main__':
