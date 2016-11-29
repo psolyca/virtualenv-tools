@@ -17,7 +17,6 @@ import optparse
 import os.path
 import re
 import shutil
-import subprocess
 import sys
 from types import CodeType
 
@@ -221,55 +220,6 @@ def update_paths(base, new_path):
     return True
 
 
-def reinitialize_virtualenv(path):
-    """Re-initializes a virtualenv."""
-    lib_dir = os.path.join(path, 'lib')
-    if not os.path.isdir(lib_dir):
-        print('error: %s is not a virtualenv bin folder' % path)
-        return False
-
-    py_ver = None
-    for filename in os.listdir(lib_dir):
-        if _pybin_match.match(filename):
-            py_ver = filename
-            break
-
-    if py_ver is None:
-        print('error: could not detect python version of virtualenv %s' % path)
-        return False
-
-    sys_py_executable = subprocess.Popen(
-        ['which', py_ver], stdout=subprocess.PIPE,
-    ).communicate()[0].strip()
-
-    if not sys_py_executable:
-        print(
-            'error: could not find system version for expected python '
-            'version %s' % py_ver
-        )
-        return False
-
-    lib_dir = os.path.join(path, 'lib', py_ver)
-
-    args = ['virtualenv', '-p', sys_py_executable]
-    if not os.path.isfile(os.path.join(
-            lib_dir, 'no-global-site-packages.txt',
-    )):
-        args.append('--system-site-packages')
-
-    for filename in os.listdir(lib_dir):
-        if filename.startswith('distribute-') and \
-           filename.endswith('.egg'):
-            args.append('--distribute')
-
-    new_env = {}
-    for key, value in os.environ.items():
-        if not key.startswith('VIRTUALENV_'):
-            new_env[key] = value
-    args.append(path)
-    subprocess.Popen(args, env=new_env).wait()
-
-
 def get_original_path(venv_path):
     """This helps us know whether someone has tried to relocate the
     virtualenv
@@ -289,9 +239,6 @@ def get_original_path(venv_path):
 
 def main(argv=None):
     parser = optparse.OptionParser()
-    parser.add_option('--reinitialize', action='store_true',
-                      help='Updates the python installation '
-                      'and reinitializes the virtualenv.')
     parser.add_option('--update-path', help='Update the path for all '
                       'required executables and helper files that are '
                       'supported to the new python prefix.  You can also set '
@@ -306,10 +253,7 @@ def main(argv=None):
 
     rv = 0
 
-    if options.reinitialize:
-        for path in paths:
-            reinitialize_virtualenv(path)
-    elif options.update_path:
+    if options.update_path:
         for path in paths:
             if not update_paths(path, options.update_path):
                 rv = 1

@@ -68,13 +68,6 @@ hash of the commit in:
 $ virtualenv-tools --update-path /srv/your-application/<hash>
 ```
 
-To also update the Python executable in the virtualenv to the
-system one you can reinitialize it in one go:
-
-```
-$ virtualenv-tools --reinitialize /srv/your-application/<hash>
-```
-
 Compile once, deploy whereever.  Virtualenvs are completely self
 contained.  In order to switch the current version all you need to
 do is to relink the builds.
