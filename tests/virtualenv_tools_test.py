@@ -70,13 +70,14 @@ def test_bad_pyc(venv, capsys):
         assert out == 'Error in {}\n'.format(bad_pyc.strpath)
 
 
-def test_dir_in_bin_ok(venv):
-    venv.before.join('bin', 'im_a_directory').ensure_dir()
-    run(venv.before, venv.after)
-
-
-def test_broken_symlink_ok(venv):
-    venv.before.join('bin', 'bad_symlink').mksymlinkto('/i/dont/exist')
+def test_dir_oddities(venv):
+    bindir = venv.before.join('bin')
+    # A directory existing in the bin dir
+    bindir.join('im_a_directory').ensure_dir()
+    # A broken symlink
+    bindir.join('bad_symlink').mksymlinkto('/i/dont/exist')
+    # A file with a shebang-looking start, but not actually
+    bindir.join('not-an-exe').write('#!\nohai')
     run(venv.before, venv.after)
 
 
