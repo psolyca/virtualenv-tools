@@ -57,6 +57,17 @@ def test_move(venv, capsys):
     assert exe == venv.after.join('bin/python').strpath
 
 
+def test_move_with_auto(venv, capsys):
+    venv.before.move(venv.after)
+    ret = virtualenv_tools.main(('--update-path=auto', venv.after.strpath))
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert ret == 0
+    assert out == expected
+    exe = activated_sys_executable(venv.after)
+    assert exe == venv.after.join('bin/python').strpath
+
+
 def test_bad_pyc(venv, capsys):
     libdir = 'lib/python{}.{}'.format(*sys.version_info[:2])
     bad_pyc = venv.before.join(libdir, 'bad.pyc')
