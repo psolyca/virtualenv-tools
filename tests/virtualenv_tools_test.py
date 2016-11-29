@@ -17,10 +17,9 @@ def venv(tmpdir):
     yield collections.namedtuple('ns', ('before', 'after'))(before, after)
 
 
-def run(before, after, args=None):
-    args = args or []
+def run(before, after, args=()):
     ret = virtualenv_tools.main(
-        [before.strpath, '--update-path={}'.format(after.strpath)] + args,
+        (before.strpath, '--update-path={}'.format(after.strpath)) + args,
     )
     assert ret == 0
 
@@ -34,12 +33,12 @@ def activated_sys_executable(path):
     )).decode('UTF-8').strip()
 
 
-@pytest.mark.parametrize('helpargs', ([], ['--help']))
+@pytest.mark.parametrize('helpargs', ((), ('--help',)))
 def test_help(capsys, helpargs):
     with pytest.raises(SystemExit):
         virtualenv_tools.main(helpargs)
-    out, _ = capsys.readouterr()
-    assert 'Usage: ' in out
+    out, err = capsys.readouterr()
+    assert 'usage: ' in out + err
 
 
 def test_already_up_to_date(venv, capsys):
@@ -82,7 +81,14 @@ def test_dir_oddities(venv):
 
 
 def test_verbose(venv, capsys):
-    run(venv.before, venv.after, args=['--verbose'])
+    run(venv.before, venv.after, args=('--verbose',))
     out, _ = capsys.readouterr()
     # Lots of output
     assert len(out.splitlines()) > 50
+
+
+def test_non_absolute_error(capsys):
+    ret = virtualenv_tools.main(('--update-path', 'notabs'))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    assert out == '--update-path must be absolute: notabs\n'

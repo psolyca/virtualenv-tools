@@ -5,15 +5,15 @@
 
     A helper script that moves virtualenvs to a new location.
 
-    It only supports POSIX based virtualenvs and Python 2 at the moment.
+    It only supports POSIX based virtualenvs and at the moment.
 
     :copyright: (c) 2012 by Fireteam Ltd.
     :license: BSD, see LICENSE for more details.
 """
 from __future__ import print_function
 
+import argparse
 import marshal
-import optparse
 import os.path
 import re
 import shutil
@@ -183,16 +183,10 @@ def remove_local(base, new_path):
 
 def update_paths(base, new_path):
     """Updates all paths in a virtualenv to a new one."""
-    if new_path == 'auto':
-        new_path = os.path.abspath(base)
-    if not os.path.isabs(new_path):
-        print('error: %s is not an absolute path' % new_path)
-        return False
-
     orig_path = get_original_path(base)
     if new_path == orig_path:
         print('Already up-to-date: %s (%s)' % (base, new_path))
-        return True
+        return 0
 
     bin_dir = os.path.join(base, 'bin')
     base_lib_dir = os.path.join(base, 'lib')
@@ -209,7 +203,7 @@ def update_paths(base, new_path):
     if lib_dir is None or not os.path.isdir(bin_dir) \
        or not os.path.isfile(os.path.join(bin_dir, 'python')):
         print('error: %s does not refer to a python installation' % base)
-        return False
+        return 1
 
     update_scripts(bin_dir, orig_path, new_path)
     update_pycs(lib_dir, new_path, lib_name)
@@ -217,7 +211,7 @@ def update_paths(base, new_path):
     update_scripts(bin_dir, orig_path, new_path, activation=True)
 
     print('Updated: %s (%s -> %s)' % (base, orig_path, new_path))
-    return True
+    return 0
 
 
 def get_original_path(venv_path):
@@ -238,28 +232,35 @@ def get_original_path(venv_path):
 
 
 def main(argv=None):
-    parser = optparse.OptionParser()
-    parser.add_option('--update-path', help='Update the path for all '
-                      'required executables and helper files that are '
-                      'supported to the new python prefix.  You can also set '
-                      'this to "auto" for autodetection.')
-    parser.add_option('--verbose', action='store_true',
-                      help='show a listing of changes')
-    options, paths = parser.parse_args(argv)
+    parser = argparse.ArgumentParser()
+    parser.add_argument(
+        '--update-path',
+        required=True,
+        help=(
+            'Update the path for all required executables and helper files '
+            'that are supported to the new python prefix.  You can also set '
+            'this to "auto" for autodetection.'
+        ),
+    )
+    parser.add_argument(
+        '--verbose', action='store_true', help='show a listing of changes',
+    )
+    parser.add_argument('path', default='.', nargs='?')
+    args = parser.parse_args(argv)
+
     global VERBOSE
-    VERBOSE = options.verbose
-    if not paths:
-        paths = ['.']
+    VERBOSE = args.verbose
 
-    rv = 0
-
-    if options.update_path:
-        for path in paths:
-            if not update_paths(path, options.update_path):
-                rv = 1
+    if args.update_path == 'auto':
+        update_path = os.path.abspath(args.path)
     else:
-        parser.parse_args(['--help'])
-    return rv
+        update_path = args.update_path
+
+    if not os.path.isabs(update_path):
+        print('--update-path must be absolute: {}'.format(update_path))
+        return 1
+
+    return update_paths(args.path, update_path)
 
 
 if __name__ == '__main__':
