@@ -47,6 +47,22 @@ def test_already_up_to_date(venv, capsys):
     assert out == 'Already up-to-date: {0} ({0})\n'.format(venv.before)
 
 
+def test_each_part_idempotent(tmpdir, venv, capsys):
+    activate = venv.before.join('bin/activate')
+    before_activate_contents = activate.read()
+    run(venv.before, venv.after)
+    capsys.readouterr()
+    # Write the activate file to trick the logic into rerunning
+    activate.write(before_activate_contents)
+    run(venv.before, venv.after, args=('--verbose',))
+    out, _ = capsys.readouterr()
+    # Should only update our activate file:
+    expected = 'A {0}\nUpdated: {1} ({1} -> {2})\n'.format(
+        activate, venv.before, venv.after,
+    )
+    assert out == expected
+
+
 def test_move(venv, capsys):
     run(venv.before, venv.after)
     out, _ = capsys.readouterr()
