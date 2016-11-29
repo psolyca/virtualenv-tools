@@ -16,6 +16,7 @@ import marshal
 import optparse
 import os.path
 import re
+import shutil
 import subprocess
 import sys
 from types import CodeType
@@ -170,22 +171,15 @@ def update_pycs(lib_dir, new_path, lib_name):
                     update_pyc(filename, local_path)
 
 
-def update_local(base, new_path):
+def remove_local(base, new_path):
     """On some systems virtualenv seems to have something like a local
-    directory with symlinks.  It appears to happen on debian systems and
-    it causes havok if not updated.  So do that.
+    directory with symlinks.  This directory is safe to remove in modern
+    versions of virtualenv.  Delete it.
     """
     local_dir = os.path.join(base, 'local')
-    if not os.path.isdir(local_dir):
-        return
-
-    for folder in 'bin', 'lib', 'include':
-        filename = os.path.join(local_dir, folder)
-        target = '../%s' % folder
-        if os.path.islink(filename) and os.readlink(filename) != target:
-            os.remove(filename)
-            os.symlink('../%s' % folder, filename)
-            debug('L %s' % filename)
+    if os.path.exists(local_dir):  # pragma: no cover (not all systems)
+        debug('D {}'.format(local_dir))
+        shutil.rmtree(local_dir)
 
 
 def update_paths(base, new_path):
@@ -220,7 +214,7 @@ def update_paths(base, new_path):
 
     update_scripts(bin_dir, orig_path, new_path)
     update_pycs(lib_dir, new_path, lib_name)
-    update_local(base, new_path)
+    remove_local(base, new_path)
     update_scripts(bin_dir, orig_path, new_path, activation=True)
 
     print('Updated: %s (%s -> %s)' % (base, orig_path, new_path))
