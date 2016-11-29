@@ -87,8 +87,6 @@ def update_script(script_filename, old_path, new_path):
         new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
     else:
         return
-    if new_bin == args[0]:
-        return
 
     args[0] = new_bin
     lines[0] = '#!%s\n' % ' '.join(args)
