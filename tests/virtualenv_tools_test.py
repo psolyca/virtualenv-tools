@@ -103,3 +103,44 @@ def test_non_absolute_error(capsys):
     out, _ = capsys.readouterr()
     assert ret == 1
     assert out == '--update-path must be absolute: notabs\n'
+
+
+@pytest.yield_fixture
+def fake_venv(tmpdir):
+    tmpdir.join('bin').ensure_dir()
+    tmpdir.join('lib/python2.7').ensure_dir()
+    tmpdir.join('bin/activate').write('VIRTUAL_ENV=/venv')
+    yield tmpdir
+
+
+def test_not_a_virtualenv_missing_bindir(fake_venv, capsys):
+    fake_venv.join('bin').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_venv, fake_venv.join('bin'),
+    )
+    assert out == expected
+
+
+def test_not_a_virtualenv_missing_activate_file(fake_venv, capsys):
+    fake_venv.join('bin/activate').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a file: {}\n'.format(
+        fake_venv, fake_venv.join('bin/activate'),
+    )
+    assert out == expected
+
+
+def test_not_a_virtualenv_missing_versioned_lib_directory(fake_venv, capsys):
+    fake_venv.join('lib/python2.7').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_venv, fake_venv.join('lib/python#.#'),
+    )
+    assert out == expected
