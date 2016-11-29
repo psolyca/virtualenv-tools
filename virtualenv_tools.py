@@ -225,7 +225,7 @@ def get_original_path(venv_path):
             if line.startswith('VIRTUAL_ENV="'):
                 return line.split('"', 2)[1]
         else:
-            raise SystemExit(
+            raise AssertionError(
                 'Could not find VIRTUAL_ENV=" in activation script: %s' %
                 activate_path
             )
