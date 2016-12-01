@@ -3,6 +3,16 @@
 
 ##  yelp patches
 
+### yelp4
+
+* Add python3 support
+* Drop python2.6 support
+* 100% test coverage
+* Removes `$VENV/local` instead of fixing up symlinks
+* Removed `--reinitialize`, instead run `virtualenv $VENV -p $PYTHON`
+* Rewrite .pth files to relative paths
+
+
 ### yelp3
 
 * default output much more concise, added a --verbose option
