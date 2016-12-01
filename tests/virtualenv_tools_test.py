@@ -8,13 +8,35 @@ import pytest
 import virtualenv_tools
 
 
+def auto_namedtuple(**kwargs):
+    return collections.namedtuple('ns', tuple(kwargs))(**kwargs)
+
+
 @pytest.yield_fixture
 def venv(tmpdir):
-    before = tmpdir.join('before')
-    after = tmpdir.join('after')
-    cmd = (sys.executable, '-m', 'virtualenv', before.strpath)
+    app_before = tmpdir.join('before').ensure_dir()
+    app_before.join('mymodule.py').write(
+        "if __name__ == '__main__':\n"
+        "    print('ohai!')\n"
+    )
+    app_before.join('setup.py').write(
+        'from setuptools import setup\n'
+        'setup(name="mymodule", py_modules=["mymodule"])\n'
+    )
+    venv_before = app_before.join('venv')
+    app_after = tmpdir.join('after')
+    venv_after = app_after.join('venv')
+
+    cmd = (sys.executable, '-m', 'virtualenv', venv_before.strpath)
     subprocess.check_call(cmd)
-    yield collections.namedtuple('ns', ('before', 'after'))(before, after)
+    subprocess.check_call((
+        venv_before.join('bin/pip').strpath,
+        'install', '-e', app_before.strpath,
+    ))
+    yield auto_namedtuple(
+        app_before=app_before, app_after=app_after,
+        before=venv_before, after=venv_after,
+    )
 
 
 def run(before, after, args=()):
@@ -22,15 +44,6 @@ def run(before, after, args=()):
         (before.strpath, '--update-path={}'.format(after.strpath)) + args,
     )
     assert ret == 0
-
-
-def activated_sys_executable(path):
-    return subprocess.check_output((
-        'bash', '-c',
-        ". {} && python -c 'import sys; print(sys.executable)'".format(
-            pipes.quote(path.join('bin/activate').strpath),
-        )
-    )).decode('UTF-8').strip()
 
 
 @pytest.mark.parametrize('helpargs', ((), ('--help',)))
@@ -63,25 +76,48 @@ def test_each_part_idempotent(tmpdir, venv, capsys):
     assert out == expected
 
 
+def _assert_activated_sys_executable(path):
+    exe = subprocess.check_output((
+        'bash', '-c',
+        ". {} && python -c 'import sys; print(sys.executable)'".format(
+            pipes.quote(path.join('bin/activate').strpath),
+        )
+    )).decode('UTF-8').strip()
+    assert exe == path.join('bin/python').strpath
+
+
+def _assert_mymodule_output(path):
+    out = subprocess.check_output(
+        (path.join('bin/python').strpath, '-m', 'mymodule'),
+        # Run from '/' to ensure we're not importing from .
+        cwd='/',
+    ).decode('UTF-8')
+    assert out == 'ohai!\n'
+
+
+def assert_virtualenv_state(path):
+    _assert_activated_sys_executable(path)
+    _assert_mymodule_output(path)
+
+
 def test_move(venv, capsys):
+    assert_virtualenv_state(venv.before)
     run(venv.before, venv.after)
     out, _ = capsys.readouterr()
     expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
     assert out == expected
-    venv.before.move(venv.after)
-    exe = activated_sys_executable(venv.after)
-    assert exe == venv.after.join('bin/python').strpath
+    venv.app_before.move(venv.app_after)
+    assert_virtualenv_state(venv.after)
 
 
 def test_move_with_auto(venv, capsys):
-    venv.before.move(venv.after)
+    venv.app_before.move(venv.app_after)
     ret = virtualenv_tools.main(('--update-path=auto', venv.after.strpath))
     out, _ = capsys.readouterr()
     expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
     assert ret == 0
     assert out == expected
-    exe = activated_sys_executable(venv.after)
-    assert exe == venv.after.join('bin/python').strpath
+    assert_virtualenv_state(venv.after)
 
 
 def test_bad_pyc(venv, capsys):
@@ -124,7 +160,7 @@ def test_non_absolute_error(capsys):
 @pytest.yield_fixture
 def fake_venv(tmpdir):
     tmpdir.join('bin').ensure_dir()
-    tmpdir.join('lib/python2.7').ensure_dir()
+    tmpdir.join('lib/python2.7/site-packages').ensure_dir()
     tmpdir.join('bin/activate').write('VIRTUAL_ENV=/venv')
     yield tmpdir
 
@@ -158,5 +194,16 @@ def test_not_a_virtualenv_missing_versioned_lib_directory(fake_venv, capsys):
     assert ret == 1
     expected = '{} is not a virtualenv: not a directory: {}\n'.format(
         fake_venv, fake_venv.join('lib/python#.#'),
+    )
+    assert out == expected
+
+
+def test_not_a_virtualenv_missing_site_packages(fake_venv, capsys):
+    fake_venv.join('lib/python2.7/site-packages').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_venv, fake_venv.join('lib/python2.7/site-packages'),
     )
     assert out == expected

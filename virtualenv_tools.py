@@ -167,6 +167,33 @@ def update_pycs(lib_dir, new_path):
                 update_pyc(filename, local_path)
 
 
+def _update_pth_file(pth_filename, orig_path):
+    with open(pth_filename) as f:
+        lines = f.readlines()
+    changed = False
+    for i, line in enumerate(lines):
+        val = line.strip()
+        if val.startswith('import ') or not os.path.isabs(val):
+            continue
+        changed = True
+        relto_original = os.path.relpath(val, orig_path)
+        # lib/pythonX.X/site-packages
+        relto_pth = os.path.join('../../..', relto_original)
+        lines[i] = '{}\n'.format(relto_pth)
+    if changed:
+        with open(pth_filename, 'w') as f:
+            f.write(''.join(lines))
+        debug('P {}'.format(pth_filename))
+
+
+def update_pth_files(site_packages, orig_path):
+    """Converts /full/paths in pth files to relative relocatable paths."""
+    for filename in os.listdir(site_packages):
+        filename = os.path.join(site_packages, filename)
+        if filename.endswith('.pth') and os.path.isfile(filename):
+            _update_pth_file(filename, orig_path)
+
+
 def remove_local(base):
     """On some systems virtualenv seems to have something like a local
     directory with symlinks.  This directory is safe to remove in modern
@@ -182,6 +209,7 @@ def update_paths(venv, new_path):
     """Updates all paths in a virtualenv to a new one."""
     update_scripts(venv.bin_dir, venv.orig_path, new_path)
     update_pycs(venv.lib_dir, new_path)
+    update_pth_files(venv.site_packages, venv.orig_path)
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
@@ -212,7 +240,7 @@ class NotAVirtualenvError(OSError):
 
 
 Virtualenv = collections.namedtuple(
-    'Virtualenv', ('path', 'bin_dir', 'lib_dir', 'orig_path'),
+    'Virtualenv', ('path', 'bin_dir', 'lib_dir', 'site_packages', 'orig_path'),
 )
 
 
@@ -238,8 +266,12 @@ def _get_original_state(path):
         )
     lib_dir, = lib_dirs
 
+    site_packages = os.path.join(lib_dir, 'site-packages')
+    if not os.path.isdir(site_packages):
+        raise NotAVirtualenvError(path, 'directory', site_packages)
+
     orig_path = get_orig_path(path)
-    return Virtualenv(path, bin_dir, lib_dir, orig_path)
+    return Virtualenv(path, bin_dir, lib_dir, site_packages, orig_path)
 
 
 def main(argv=None):
