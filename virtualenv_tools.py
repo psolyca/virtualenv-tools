@@ -28,6 +28,7 @@ ACTIVATION_SCRIPTS = [
     'activate.fish'
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
+_pypy_match = re.compile(r'^\d+\.\d+$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$',
 )
@@ -274,6 +275,36 @@ def _get_original_state(path):
     return Virtualenv(path, bin_dir, lib_dir, site_packages, orig_path)
 
 
+def _get_original_state_pypy(path):
+    bin_dir = os.path.join(path, 'bin')
+    base_lib_dir = os.path.join(path, 'lib-python')
+    activate_file = os.path.join(bin_dir, 'activate')
+
+    for dir_path in (bin_dir, base_lib_dir):
+        if not os.path.isdir(dir_path):
+            raise NotAVirtualenvError(path, 'directory', dir_path)
+    if not os.path.isfile(activate_file):
+        raise NotAVirtualenvError(path, 'file', activate_file)
+
+    lib_dirs = [
+        os.path.join(base_lib_dir, potential_lib_dir)
+        for potential_lib_dir in os.listdir(base_lib_dir)
+        if _pypy_match.match(potential_lib_dir)
+    ]
+    if len(lib_dirs) != 1:
+        raise NotAVirtualenvError(
+            path, 'directory', os.path.join(base_lib_dir, '#.#'),
+        )
+    lib_dir, = lib_dirs
+
+    site_packages = os.path.join(path, 'site-packages')
+    if not os.path.isdir(site_packages):
+        raise NotAVirtualenvError(path, 'directory', site_packages)
+
+    orig_path = get_orig_path(path)
+    return Virtualenv(path, bin_dir, lib_dir, site_packages, orig_path)
+
+
 def main(argv=None):
     parser = argparse.ArgumentParser()
     parser.add_argument(
@@ -304,7 +335,9 @@ def main(argv=None):
         return 1
 
     try:
-        venv = _get_original_state(args.path)
+        is_pypy = os.path.isdir(os.path.join(args.path, 'lib_pypy'))
+        venv = _get_original_state_pypy(args.path) \
+            if is_pypy else _get_original_state(args.path)
     except NotAVirtualenvError as e:
         print(e)
         return 1
