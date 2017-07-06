@@ -207,3 +207,57 @@ def test_not_a_virtualenv_missing_site_packages(fake_venv, capsys):
         fake_venv, fake_venv.join('lib/python2.7/site-packages'),
     )
     assert out == expected
+
+
+@pytest.yield_fixture
+def fake_pypy_venv(tmpdir):
+    tmpdir.join('bin').ensure_dir()
+    tmpdir.join('lib_pypy').ensure_dir()
+    tmpdir.join('site-packages').ensure_dir()
+    tmpdir.join('lib-python/py27').ensure_dir()
+    tmpdir.join('bin/activate').write('VIRTUAL_ENV=/venv')
+    yield tmpdir
+
+
+def test_pypy_not_a_virtualenv_missing_bindir(fake_pypy_venv, capsys):
+    fake_pypy_venv.join('bin').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_pypy_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_pypy_venv, fake_pypy_venv.join('bin'),
+    )
+    assert out == expected
+
+
+def test_pypy_not_a_virtualenv_missing_activate_file(fake_pypy_venv, capsys):
+    fake_pypy_venv.join('bin/activate').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_pypy_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a file: {}\n'.format(
+        fake_pypy_venv, fake_pypy_venv.join('bin/activate'),
+    )
+    assert out == expected
+
+
+def test_pypy_not_a_virtualenv_missing_versioned_lib_directory(fake_pypy_venv, capsys):
+    fake_pypy_venv.join('lib-python/py27').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_pypy_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_pypy_venv, fake_pypy_venv.join('lib-python/py##'),
+    )
+    assert out == expected
+
+
+def test_pypy_not_a_virtualenv_missing_site_packages(fake_pypy_venv, capsys):
+    fake_pypy_venv.join('site-packages').remove()
+    ret = virtualenv_tools.main(('--update-path=auto', fake_pypy_venv.strpath))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    expected = '{} is not a virtualenv: not a directory: {}\n'.format(
+        fake_pypy_venv, fake_pypy_venv.join('site-packages'),
+    )
+    assert out == expected
