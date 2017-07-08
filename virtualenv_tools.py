@@ -28,7 +28,7 @@ ACTIVATION_SCRIPTS = [
     'activate.fish'
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
-_pypy_match = re.compile(r'^py\d+\d+$')
+_pypy_match = re.compile(r'^\d+.\d+$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$',
 )
@@ -293,7 +293,7 @@ def _get_original_state_pypy(path):
     ]
     if len(lib_dirs) != 1:
         raise NotAVirtualenvError(
-            path, 'directory', os.path.join(base_lib_dir, 'py##'),
+            path, 'directory', os.path.join(base_lib_dir, '#.#'),
         )
     lib_dir, = lib_dirs
 
