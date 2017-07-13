@@ -1,6 +1,5 @@
 import collections
 import pipes
-import shutil
 import subprocess
 import sys
 
@@ -163,8 +162,8 @@ class TestVirtualenvTools(object):
 
 
 @pytest.mark.skipif(
-    sys.version_info >= (3, 3) and not shutil.which('pypy3'),
-    reason="pypy3 is required to run these tests under python3.3+"
+    sys.version_info >= (3, 3),
+    reason='pypy3 is not supported yet.'
 )
 class TestVirtualenvToolsPyPy(TestVirtualenvTools):
 
