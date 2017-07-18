@@ -178,9 +178,11 @@ def _update_pth_file(pth_filename, orig_path, is_pypy):
             continue
         changed = True
         relto_original = os.path.relpath(val, orig_path)
-        # lib/pythonX.X/site-packages
+        # If we are moving a pypy venv the site-packages directory
+        # is in a different location than if we are moving a cpython venv
         relto_pth = os.path.join(
-            '..' if is_pypy else '../../..',
+            '..' if is_pypy    # venv/site-packages
+            else '../../..',   # venv/lib/pythonX.X/site-packages
             relto_original
         )
         lines[i] = '{}\n'.format(relto_pth)
@@ -257,8 +259,9 @@ Virtualenv = collections.namedtuple(
 
 
 def _get_original_state(path):
+    is_pypy = os.path.isdir(os.path.join(path, 'lib_pypy'))
     bin_dir = os.path.join(path, 'bin')
-    base_lib_dir = os.path.join(path, 'lib')
+    base_lib_dir = os.path.join(path, 'lib-python' if is_pypy else 'lib')
     activate_file = os.path.join(bin_dir, 'activate')
 
     for dir_path in (bin_dir, base_lib_dir):
@@ -267,66 +270,34 @@ def _get_original_state(path):
     if not os.path.isfile(activate_file):
         raise NotAVirtualenvError(path, 'file', activate_file)
 
+    matcher = _pypy_match if is_pypy else _pybin_match
     lib_dirs = [
         os.path.join(base_lib_dir, potential_lib_dir)
         for potential_lib_dir in os.listdir(base_lib_dir)
-        if _pybin_match.match(potential_lib_dir)
+        if matcher.match(potential_lib_dir)
     ]
     if len(lib_dirs) != 1:
         raise NotAVirtualenvError(
-            path, 'directory', os.path.join(base_lib_dir, 'python#.#'),
+            path,
+            'directory',
+            os.path.join(base_lib_dir, '#.#' if is_pypy else 'python#.#'),
         )
     lib_dir, = lib_dirs
 
-    site_packages = os.path.join(lib_dir, 'site-packages')
+    site_packages = os.path.join(path if is_pypy else lib_dir, 'site-packages')
     if not os.path.isdir(site_packages):
         raise NotAVirtualenvError(path, 'directory', site_packages)
 
-    orig_path = get_orig_path(path)
+    lib_dirs = [lib_dir]
+    if is_pypy:
+        lib_dirs.append(os.path.join(path, 'lib_pypy'))
     return Virtualenv(
         path=path,
         bin_dir=bin_dir,
-        lib_dirs=[lib_dir],
+        lib_dirs=lib_dirs,
         site_packages=site_packages,
-        orig_path=orig_path,
-        is_pypy=False
-    )
-
-
-def _get_original_state_pypy(path):
-    bin_dir = os.path.join(path, 'bin')
-    base_lib_dir = os.path.join(path, 'lib-python')
-    activate_file = os.path.join(bin_dir, 'activate')
-
-    for dir_path in (bin_dir, base_lib_dir):
-        if not os.path.isdir(dir_path):
-            raise NotAVirtualenvError(path, 'directory', dir_path)
-    if not os.path.isfile(activate_file):
-        raise NotAVirtualenvError(path, 'file', activate_file)
-
-    lib_dirs = [
-        os.path.join(base_lib_dir, potential_lib_dir)
-        for potential_lib_dir in os.listdir(base_lib_dir)
-        if _pypy_match.match(potential_lib_dir)
-    ]
-    if len(lib_dirs) != 1:
-        raise NotAVirtualenvError(
-            path, 'directory', os.path.join(base_lib_dir, '#.#'),
-        )
-    lib_dir, = lib_dirs
-
-    site_packages = os.path.join(path, 'site-packages')
-    if not os.path.isdir(site_packages):
-        raise NotAVirtualenvError(path, 'directory', site_packages)
-
-    orig_path = get_orig_path(path)
-    return Virtualenv(
-        path=path,
-        bin_dir=bin_dir,
-        lib_dirs=[lib_dir, os.path.join(path, 'lib_pypy')],
-        site_packages=site_packages,
-        orig_path=orig_path,
-        is_pypy=True
+        orig_path=get_orig_path(path),
+        is_pypy=is_pypy
     )
 
 
@@ -360,9 +331,7 @@ def main(argv=None):
         return 1
 
     try:
-        is_pypy = os.path.isdir(os.path.join(args.path, 'lib_pypy'))
-        venv = _get_original_state_pypy(args.path) \
-            if is_pypy else _get_original_state(args.path)
+        venv = _get_original_state(path=args.path)
     except NotAVirtualenvError as e:
         print(e)
         return 1

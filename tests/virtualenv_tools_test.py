@@ -76,20 +76,19 @@ def test_each_part_idempotent(tmpdir, venv, capsys):
     assert out == expected
 
 
-def _assert_activated_sys_executable(path, py):
+def _assert_activated_sys_executable(path):
     exe = subprocess.check_output((
         'bash', '-c',
-        ". {activate} && {py} -c 'import sys; print(sys.executable)'".format(
-            activate=pipes.quote(path.join('bin/activate').strpath),
-            py=py
+        ". {} && python -c 'import sys; print(sys.executable)'".format(
+            pipes.quote(path.join('bin/activate').strpath)
         )
     )).decode('UTF-8').strip()
-    assert exe == path.join('bin/{py}'.format(py=py)).strpath
+    assert exe == path.join('bin/python').strpath
 
 
-def _assert_mymodule_output(path, py):
+def _assert_mymodule_output(path):
     out = subprocess.check_output(
-        (path.join('bin/{py}'.format(py=py)).strpath, '-m', 'mymodule'),
+        (path.join('bin/python').strpath, '-m', 'mymodule'),
         # Run from '/' to ensure we're not importing from .
         cwd='/',
     ).decode('UTF-8')
@@ -97,8 +96,8 @@ def _assert_mymodule_output(path, py):
 
 
 def assert_virtualenv_state(path):
-    _assert_activated_sys_executable(path, 'python')
-    _assert_mymodule_output(path, 'python')
+    _assert_activated_sys_executable(path)
+    _assert_mymodule_output(path)
 
 
 def test_move(venv, capsys):
@@ -215,15 +214,17 @@ def test_not_a_virtualenv_missing_site_packages(fake_venv, capsys):
 # https://github.com/Yelp/virtualenv-tools/pull/11 to reduce duplication
 
 
+# FIXME: We don't currently support (or test) pypy3
+# We test py3 stuff when test interpreter is py3 and likewise we would test
+# pypy3 under a py3 test interpreter, but we don't have it and don't care too
+# much to fix it. This is because the pyc format changed in cpython3.3+.
+# To work on pypy3 support change the skip condition to:
+# `sys.version_info >= (3, 3) and shutil.which('pypy3') is None`
+# this will allow the tests to proceed if pypy3 is available.
 skip_test_if_requires_pypy3 = pytest.mark.skipif(
     sys.version_info >= (3, 3),
-    reason='pypy3 is not supported.'
+    reason='We do not currently support (or test) pypy3.'
 )
-
-
-def assert_virtualenv_state_pypy(path):
-    _assert_activated_sys_executable(path, 'pypy')
-    _assert_mymodule_output(path, 'pypy')
 
 
 @pytest.yield_fixture
@@ -280,7 +281,7 @@ def test_each_part_idempotent_pypy(tmpdir, venv_pypy, capsys):
 
 @skip_test_if_requires_pypy3
 def test_move_pypy(venv_pypy, capsys):
-    assert_virtualenv_state_pypy(venv_pypy.before)
+    assert_virtualenv_state(venv_pypy.before)
     run(venv_pypy.before, venv_pypy.after)
     out, _ = capsys.readouterr()
     expected = 'Updated: {0} ({0} -> {1})\n'.format(
@@ -289,7 +290,7 @@ def test_move_pypy(venv_pypy, capsys):
     )
     assert out == expected
     venv_pypy.app_before.move(venv_pypy.app_after)
-    assert_virtualenv_state_pypy(venv_pypy.after)
+    assert_virtualenv_state(venv_pypy.after)
 
 
 @skip_test_if_requires_pypy3
@@ -305,7 +306,7 @@ def test_move_with_auto_pypy(venv_pypy, capsys):
     )
     assert ret == 0
     assert out == expected
-    assert_virtualenv_state_pypy(venv_pypy.after)
+    assert_virtualenv_state(venv_pypy.after)
 
 
 @skip_test_if_requires_pypy3
