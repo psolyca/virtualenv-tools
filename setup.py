@@ -8,7 +8,7 @@ setup(
     name='virtualenv-tools',
     author='Fireteam Ltd.',
     author_email='support@fireteam.net',
-    version='1.0-yelp4',
+    version='1.0-yelp5',
     url='http://github.com/fireteam/virtualenv-tools',
     py_modules=['virtualenv_tools'],
     description='A set of tools for virtualenv',
