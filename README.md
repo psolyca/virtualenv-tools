@@ -1,5 +1,14 @@
 [![Build Status](https://travis-ci.org/Yelp/virtualenv-tools.svg?branch=master)](https://travis-ci.org/Yelp/virtualenv-tools)
 [![Coverage Status](https://img.shields.io/coveralls/Yelp/virtualenv-tools.svg?branch=master)](https://coveralls.io/r/Yelp/virtualenv-tools)
+[![PyPI version](https://badge.fury.io/py/virtualenv-tools3.svg)](https://pypi.python.org/pypi/virtualenv-tools3)
+
+virtualenv-tools3
+--------
+
+virtualenv-tools3 is a fork of [the original
+virtualenv-tools](https://github.com/fireteam/virtualenv-tools) (now
+unmaintained) which adds support for Python 3, among other things. Full patch
+details are below.
 
 ##  yelp patches
 
