@@ -1,5 +1,6 @@
 import collections
 import pipes
+import platform
 import subprocess
 import sys
 
@@ -120,8 +121,14 @@ def test_move_with_auto(venv, capsys):
     assert_virtualenv_state(venv.after)
 
 
+if platform.python_implementation() == 'PyPy':  # pragma: no cover (pypy)
+    libdir_fmt = 'lib-python/{}.{}'
+else:  # pragma: no cover (non-pypy)
+    libdir_fmt = 'lib/python{}.{}'
+
+
 def test_bad_pyc(venv, capsys):
-    libdir = 'lib/python{}.{}'.format(*sys.version_info[:2])
+    libdir = libdir_fmt.format(*sys.version_info[:2])
     bad_pyc = venv.before.join(libdir, 'bad.pyc')
     bad_pyc.write_binary(b'I am a very naughty pyc\n')
     # Retries on failures as well
@@ -147,7 +154,7 @@ def test_verbose(venv, capsys):
     run(venv.before, venv.after, args=('--verbose',))
     out, _ = capsys.readouterr()
     # Lots of output
-    assert len(out.splitlines()) > 50
+    assert len(out.splitlines()) > 25
 
 
 def test_non_absolute_error(capsys):

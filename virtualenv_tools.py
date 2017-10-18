@@ -289,7 +289,7 @@ def _get_original_state(path):
         raise NotAVirtualenvError(path, 'directory', site_packages)
 
     lib_dirs = [lib_dir]
-    if is_pypy:
+    if is_pypy:  # pragma: no cover (pypy only)
         lib_dirs.append(os.path.join(path, 'lib_pypy'))
     return Virtualenv(
         path=path,
