@@ -94,7 +94,7 @@ def update_script(script_filename, old_path, new_path):
         return
 
     args[0] = new_bin
-    lines[0] = b'#!%s\n' % b' '.join(args)
+    lines[0] = b'#!' + b' '.join(args) + b'\n'
     debug('S %s' % script_filename)
     with open(script_filename, 'wb') as f:
         f.writelines(lines)
