@@ -13,16 +13,22 @@ def auto_namedtuple(**kwargs):
     return collections.namedtuple('ns', tuple(kwargs))(**kwargs)
 
 
-@pytest.yield_fixture
-def venv(tmpdir):
+@pytest.yield_fixture(params=[None, '-e'])
+def venv(tmpdir, request):
     app_before = tmpdir.join('before').ensure_dir()
     app_before.join('mymodule.py').write(
-        "if __name__ == '__main__':\n"
-        "    print('ohai!')\n"
+        b"#!/usr/bin/env python\n"
+        b'"""Copyright: \xc2\xa9 Me"""\n'
+        b"if __name__ == '__main__':\n"
+        b"    print('ohai!')\n",
+        mode='wb'
     )
     app_before.join('setup.py').write(
         'from setuptools import setup\n'
-        'setup(name="mymodule", py_modules=["mymodule"])\n'
+        'setup('
+        'name="mymodule", '
+        'py_modules=["mymodule"], '
+        'scripts=["mymodule.py"])\n'
     )
     venv_before = app_before.join('venv')
     app_after = tmpdir.join('after')
@@ -30,10 +36,18 @@ def venv(tmpdir):
 
     cmd = (sys.executable, '-m', 'virtualenv', venv_before.strpath)
     subprocess.check_call(cmd)
-    subprocess.check_call((
-        venv_before.join('bin/pip').strpath,
-        'install', '-e', app_before.strpath,
-    ))
+    if request.param:
+        pip_cmd = (
+            venv_before.join('bin/pip').strpath,
+            'install', request.param, app_before.strpath,
+        )
+    else:
+        pip_cmd = (
+            venv_before.join('bin/pip').strpath,
+            'install', app_before.strpath,
+        )
+
+    subprocess.check_call(pip_cmd)
     yield auto_namedtuple(
         app_before=app_before, app_after=app_after,
         before=venv_before, after=venv_after,
