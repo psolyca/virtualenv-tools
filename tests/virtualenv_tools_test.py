@@ -111,6 +111,37 @@ def test_move(venv, capsys):
     assert_virtualenv_state(venv.after)
 
 
+def test_move_non_ascii_script(venv, capsys):
+    # We have a script with non-ascii bytes which we
+    # want to install non-editable.
+    venv.app_before.join('mymodule.py').write_binary(
+        b"#!/usr/bin/env python\n"
+        b'"""Copyright: \xc2\xa9 Me"""\n'
+        b"if __name__ == '__main__':\n"
+        b"    print('ohai!')\n"
+    )
+    venv.app_before.join('setup.py').write(
+        'from setuptools import setup\n'
+        'setup('
+        '   name="mymodule", '
+        '   py_modules=["mymodule"], '
+        '   scripts=["mymodule.py"], '
+        ')\n'
+    )
+    subprocess.check_call((
+        venv.before.join('bin/pip').strpath,
+        'install', '--upgrade', venv.app_before.strpath,
+    ))
+
+    assert_virtualenv_state(venv.before)
+    run(venv.before, venv.after)
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert out == expected
+    venv.app_before.move(venv.app_after)
+    assert_virtualenv_state(venv.after)
+
+
 def test_move_with_auto(venv, capsys):
     venv.app_before.move(venv.app_after)
     ret = virtualenv_tools.main(('--update-path=auto', venv.after.strpath))

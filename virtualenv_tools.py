@@ -70,16 +70,19 @@ def update_activation_script(script_filename, new_path):
 
 def path_is_within(path, within):
     relpath = os.path.relpath(path, within)
-    return not relpath.startswith('.')
+    return not relpath.startswith(b'.')
 
 
 def update_script(script_filename, old_path, new_path):
     """Updates shebang lines for actual scripts."""
+    filesystem_encoding = sys.getfilesystemencoding()
+    old_path = old_path.encode(filesystem_encoding)
+    new_path = new_path.encode(filesystem_encoding)
+
     with open(script_filename, 'rb') as f:
         if f.read(2) != b'#!':
             return
-
-    with open(script_filename) as f:
+        f.seek(0)
         lines = list(f)
     args = lines[0][2:].strip().split()
     if not args:
@@ -91,9 +94,9 @@ def update_script(script_filename, old_path, new_path):
         return
 
     args[0] = new_bin
-    lines[0] = '#!%s\n' % ' '.join(args)
+    lines[0] = b'#!' + b' '.join(args) + b'\n'
     debug('S %s' % script_filename)
-    with open(script_filename, 'w') as f:
+    with open(script_filename, 'wb') as f:
         f.writelines(lines)
 
 
