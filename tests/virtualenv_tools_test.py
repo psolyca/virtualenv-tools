@@ -13,22 +13,16 @@ def auto_namedtuple(**kwargs):
     return collections.namedtuple('ns', tuple(kwargs))(**kwargs)
 
 
-@pytest.yield_fixture(params=[None, '-e'])
-def venv(tmpdir, request):
+@pytest.yield_fixture
+def venv(tmpdir):
     app_before = tmpdir.join('before').ensure_dir()
     app_before.join('mymodule.py').write(
-        b"#!/usr/bin/env python\n"
-        b'"""Copyright: \xc2\xa9 Me"""\n'
-        b"if __name__ == '__main__':\n"
-        b"    print('ohai!')\n",
-        mode='wb'
+        "if __name__ == '__main__':\n"
+        "    print('ohai!')\n"
     )
     app_before.join('setup.py').write(
         'from setuptools import setup\n'
-        'setup('
-        'name="mymodule", '
-        'py_modules=["mymodule"], '
-        'scripts=["mymodule.py"])\n'
+        'setup(name="mymodule", py_modules=["mymodule"])\n'
     )
     venv_before = app_before.join('venv')
     app_after = tmpdir.join('after')
@@ -36,18 +30,10 @@ def venv(tmpdir, request):
 
     cmd = (sys.executable, '-m', 'virtualenv', venv_before.strpath)
     subprocess.check_call(cmd)
-    if request.param:
-        pip_cmd = (
-            venv_before.join('bin/pip').strpath,
-            'install', request.param, app_before.strpath,
-        )
-    else:
-        pip_cmd = (
-            venv_before.join('bin/pip').strpath,
-            'install', app_before.strpath,
-        )
-
-    subprocess.check_call(pip_cmd)
+    subprocess.check_call((
+        venv_before.join('bin/pip').strpath,
+        'install', '-e', app_before.strpath,
+    ))
     yield auto_namedtuple(
         app_before=app_before, app_after=app_after,
         before=venv_before, after=venv_after,
@@ -116,6 +102,49 @@ def assert_virtualenv_state(path):
 
 
 def test_move(venv, capsys):
+    assert_virtualenv_state(venv.before)
+    run(venv.before, venv.after)
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert out == expected
+    venv.app_before.move(venv.app_after)
+    assert_virtualenv_state(venv.after)
+
+
+def test_move_installed_not_editable(tmpdir, capsys):
+    # We have a script with non-ascii bytes which we
+    # want to install non-editable.
+    app_before = tmpdir.join('before').ensure_dir()
+    app_before.join('mymodule.py').write_binary(
+        b"#!/usr/bin/env python\n"
+        b'"""Copyright: \xc2\xa9 Me"""\n'
+        b"if __name__ == '__main__':\n"
+        b"    print('ohai!')\n"
+    )
+    app_before.join('setup.py').write(
+        'from setuptools import setup\n'
+        'setup('
+        '   name="mymodule", '
+        '   py_modules=["mymodule"], '
+        '   scripts=["mymodule.py"], '
+        ')\n'
+    )
+    venv_before = app_before.join('venv')
+    app_after = tmpdir.join('after')
+    venv_after = app_after.join('venv')
+
+    cmd = (sys.executable, '-m', 'virtualenv', venv_before.strpath)
+    subprocess.check_call(cmd)
+    subprocess.check_call((
+        venv_before.join('bin/pip').strpath,
+        'install', app_before.strpath,
+    ))
+
+    venv = auto_namedtuple(
+        app_before=app_before, app_after=app_after,
+        before=venv_before, after=venv_after,
+    )
+
     assert_virtualenv_state(venv.before)
     run(venv.before, venv.after)
     out, _ = capsys.readouterr()

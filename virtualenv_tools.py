@@ -82,8 +82,7 @@ def update_script(script_filename, old_path, new_path):
     with open(script_filename, 'rb') as f:
         if f.read(2) != b'#!':
             return
-
-    with open(script_filename, 'rb') as f:
+        f.seek(0)
         lines = list(f)
     args = lines[0][2:].strip().split()
     if not args:
