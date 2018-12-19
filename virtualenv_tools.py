@@ -37,6 +37,9 @@ MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
 # In python3.3, a 4 byte "size" hint was added to pyc files
 if sys.version_info >= (3, 3):  # pragma: no cover (PY33+)
     MAGIC_LENGTH += 4
+# PEP 552 (implemented in python 3.7) extends this by another word
+if sys.version_info >= (3, 7):  # pragma: no cover (PY37+)
+    MAGIC_LENGTH += 4
 
 
 def debug(msg):
