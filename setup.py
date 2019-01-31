@@ -7,8 +7,8 @@ readme = open(os.path.join(os.path.dirname(__file__), 'README.md'), 'r').read()
 setup(
     name='virtualenv-tools3',
     author='Fireteam Ltd.; Yelp, Inc.',
-    author_email='support@fireteam.net; opensource@yelp.com',
-    version='2.0.1',
+    author_email='opensource@yelp.com',
+    version='2.0.2',
     url='http://github.com/Yelp/virtualenv-tools',
     py_modules=['virtualenv_tools'],
     description='A set of tools for virtualenv',
