@@ -25,7 +25,8 @@ from types import CodeType
 ACTIVATION_SCRIPTS = [
     'activate',
     'activate.csh',
-    'activate.fish'
+    'activate.fish',
+    'activate.xsh',
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^\d+.\d+$')
