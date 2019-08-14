@@ -15,23 +15,28 @@ from __future__ import print_function
 import argparse
 import collections
 import marshal
+import os
 import os.path
 import re
 import shutil
 import sys
 from types import CodeType
 
+IS_WINDOWS = os.name == "nt"
+BIN_DIR = "Scripts" if IS_WINDOWS else "bin"
 
 ACTIVATION_SCRIPTS = [
     'activate',
     'activate.csh',
     'activate.fish',
     'activate.xsh',
+    'activate.bat',
+    'Activate.ps1',
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^\d+.\d+$')
 _activation_path_re = re.compile(
-    r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$',
+    r'^(?:set -gx |setenv |set "|)VIRTUAL_ENV[ =]"(.*?)"\s*$',
 )
 VERBOSE = False
 MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
@@ -73,8 +78,15 @@ def update_activation_script(script_filename, new_path):
 
 
 def path_is_within(path, within):
-    relpath = os.path.relpath(path, within)
-    return not relpath.startswith(b'.')
+    try:
+        relpath = os.path.relpath(path, within)
+    except ValueError:
+        if IS_WINDOWS:  # paths aren't on the same drive
+            return False
+
+        raise
+
+    return not relpath.startswith(b".")
 
 
 def update_script(script_filename, old_path, new_path):
@@ -84,21 +96,52 @@ def update_script(script_filename, old_path, new_path):
     new_path = new_path.encode(filesystem_encoding)
 
     with open(script_filename, 'rb') as f:
-        if f.read(2) != b'#!':
+        if f.read(2) != (b'MZ' if IS_WINDOWS else b'#!'):
             return
         f.seek(0)
         lines = list(f)
-    args = lines[0][2:].strip().split()
-    if not args:
-        return
 
-    if path_is_within(args[0], old_path):
-        new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+    if not IS_WINDOWS:
+        found_shebang = False
+        for line_i, line in enumerate(lines):
+            if not line.startswith(b'</assembly>'):
+                continue
+
+            shebang_offset = line.find(b'#!')
+            if shebang_offset == -1:
+                continue
+
+            args = lines[line_i][shebang_offset + 2 :].strip().split()
+            if not args:
+                continue
+
+            if not path_is_within(args[0], old_path):
+                continue
+
+            new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+
+            line_offset = line_i
+            args_offset = shebang_offset + 2
+            found_shebang = True
+            break
+
+        if not found_shebang:
+            return
     else:
-        return
+        line_offset = 0
+        args_offset = 2
+
+        args = lines[line_offset][args_offset:].strip().split()
+        if not args:
+            return
+
+        if not path_is_within(args[0], old_path):
+            return
+
+        new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
 
     args[0] = new_bin
-    lines[0] = b'#!' + b' '.join(args) + b'\n'
+    lines[line_offset] = lines[line_offset][:args_offset] + b" ".join(args) + b"\n"
     debug('S %s' % script_filename)
     with open(script_filename, 'wb') as f:
         f.writelines(lines)
@@ -120,9 +163,9 @@ def update_pyc(filename, new_path):
         magic = f.read(MAGIC_LENGTH)
         try:
             code = marshal.load(f)
-        except Exception:
-            print('Error in %s' % filename)
-            raise
+        except Exception as err:
+            print('Error loading %s: %s' % (filename, err))
+            return
 
     def _make_code(code, filename, consts):
         if sys.version_info[0] == 2:  # pragma: no cover (PY2)
@@ -185,13 +228,15 @@ def _update_pth_file(pth_filename, orig_path, is_pypy):
             continue
         changed = True
         relto_original = os.path.relpath(val, orig_path)
-        # If we are moving a pypy venv the site-packages directory
-        # is in a different location than if we are moving a cpython venv
-        relto_pth = os.path.join(
-            '..' if is_pypy    # venv/site-packages
-            else '../../..',   # venv/lib/pythonX.X/site-packages
-            relto_original
-        )
+
+        if is_pypy:
+            rel = '..'  # venv/site-packages
+        elif IS_WINDOWS:
+            rel = '../..'  # venv/Lib/site-packages
+        else:
+            rel = '../../..'  # venv/lib/pythonX.X/site-packages
+
+        relto_pth = os.path.join(rel, relto_original)
         lines[i] = '{}\n'.format(relto_pth)
     if changed:
         with open(pth_filename, 'w') as f:
@@ -203,8 +248,29 @@ def update_pth_files(site_packages, orig_path, is_pypy):
     """Converts /full/paths in pth files to relative relocatable paths."""
     for filename in os.listdir(site_packages):
         filename = os.path.join(site_packages, filename)
-        if filename.endswith('.pth') and os.path.isfile(filename):
+        if filename.endswith(('.pth', '.egg-link')) and os.path.isfile(filename):
             _update_pth_file(filename, orig_path, is_pypy)
+
+
+def update_pyvenv_cfg(pyvenv_cfg, new_path):
+    with open(pyvenv_cfg) as f:
+        lines = list(f)
+
+    changed = False
+    for line_i, line in enumerate(lines):
+        key, value = line.split('=')
+        if key.strip() != 'home':
+            continue
+
+        lines[line_i] = 'home = ' + new_path + '\n'
+        changed = True
+        break
+
+    if not changed:
+        return
+
+    with open(pyvenv_cfg, 'w') as f:
+        f.writelines(lines)
 
 
 def remove_local(base):
@@ -218,12 +284,14 @@ def remove_local(base):
         shutil.rmtree(local_dir)
 
 
-def update_paths(venv, new_path):
+def update_paths(venv, new_path, base_python_dir=None):
     """Updates all paths in a virtualenv to a new one."""
     update_scripts(venv.bin_dir, venv.orig_path, new_path)
-    for lib_dir in venv.lib_dirs:
+    for lib_dir in [venv.bin_dir, *venv.lib_dirs]:
         update_pycs(lib_dir, new_path)
     update_pth_files(venv.site_packages, venv.orig_path, venv.is_pypy)
+    if base_python_dir:
+        update_pyvenv_cfg(venv.pyvenv_cfg_file, base_python_dir)
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
 
@@ -232,7 +300,7 @@ def get_orig_path(venv_path):
     """This helps us know whether someone has tried to relocate the
     virtualenv
     """
-    activate_path = os.path.join(venv_path, 'bin/activate')
+    activate_path = os.path.join(venv_path, f'{BIN_DIR}/activate')
 
     with open(activate_path) as activate:
         for line in activate:
@@ -260,16 +328,18 @@ Virtualenv = collections.namedtuple(
         'lib_dirs',
         'site_packages',
         'orig_path',
-        'is_pypy'
+        'is_pypy',
+        'pyvenv_cfg_file',
     ),
 )
 
 
 def _get_original_state(path):
     is_pypy = os.path.isdir(os.path.join(path, 'lib_pypy'))
-    bin_dir = os.path.join(path, 'bin')
+    bin_dir = os.path.join(path, BIN_DIR)
     base_lib_dir = os.path.join(path, 'lib-python' if is_pypy else 'lib')
     activate_file = os.path.join(bin_dir, 'activate')
+    pyvenv_cfg_file = os.path.join(path, 'pyvenv.cfg')
 
     for dir_path in (bin_dir, base_lib_dir):
         if not os.path.isdir(dir_path):
@@ -277,19 +347,22 @@ def _get_original_state(path):
     if not os.path.isfile(activate_file):
         raise NotAVirtualenvError(path, 'file', activate_file)
 
-    matcher = _pypy_match if is_pypy else _pybin_match
-    lib_dirs = [
-        os.path.join(base_lib_dir, potential_lib_dir)
-        for potential_lib_dir in os.listdir(base_lib_dir)
-        if matcher.match(potential_lib_dir)
-    ]
-    if len(lib_dirs) != 1:
-        raise NotAVirtualenvError(
-            path,
-            'directory',
-            os.path.join(base_lib_dir, '#.#' if is_pypy else 'python#.#'),
-        )
-    lib_dir, = lib_dirs
+    if IS_WINDOWS:
+        lib_dir = base_lib_dir
+    else:
+        matcher = _pypy_match if is_pypy else _pybin_match
+        lib_dirs = [
+            os.path.join(base_lib_dir, potential_lib_dir)
+            for potential_lib_dir in os.listdir(base_lib_dir)
+            if matcher.match(potential_lib_dir)
+        ]
+        if len(lib_dirs) != 1:
+            raise NotAVirtualenvError(
+                path,
+                'directory',
+                os.path.join(base_lib_dir, '#.#' if is_pypy else 'python#.#'),
+            )
+        lib_dir, = lib_dirs
 
     site_packages = os.path.join(path if is_pypy else lib_dir, 'site-packages')
     if not os.path.isdir(site_packages):
@@ -304,7 +377,8 @@ def _get_original_state(path):
         lib_dirs=lib_dirs,
         site_packages=site_packages,
         orig_path=get_orig_path(path),
-        is_pypy=is_pypy
+        is_pypy=is_pypy,
+        pyvenv_cfg_file=pyvenv_cfg_file,
     )
 
 
@@ -320,7 +394,20 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
-        '--verbose', action='store_true', help='show a listing of changes',
+        '--base-python-dir',
+        help=(
+            'A directory pointing to a valid Python installation. The virtualenv will load standard libraries from here.'
+        ),
+    )
+    parser.add_argument(
+        '--force',
+        action='store_true',
+        help=(
+            'Continue processing even if the original path is the same as the updated path.'
+        ),
+    )
+    parser.add_argument(
+        '--verbose', action='store_true', help='show a listing of changes"'
     )
     parser.add_argument('path', default='.', nargs='?')
     args = parser.parse_args(argv)
@@ -337,17 +424,21 @@ def main(argv=None):
         print('--update-path must be absolute: {}'.format(update_path))
         return 1
 
+    if not os.path.isabs(args.base_python_dir):
+        print('--base-python-dir must be absolute: {}'.format(args.base_python_dir))
+        return 1
+
     try:
         venv = _get_original_state(path=args.path)
     except NotAVirtualenvError as e:
         print(e)
         return 1
 
-    if venv.orig_path == update_path:
+    if not args.force and venv.orig_path == update_path:
         print('Already up-to-date: %s (%s)' % (venv.path, update_path))
         return 0
 
-    update_paths(venv, update_path)
+    update_paths(venv, update_path, args.base_python_dir)
     print('Updated: %s (%s -> %s)' % (venv.path, venv.orig_path, update_path))
     return 0
 
