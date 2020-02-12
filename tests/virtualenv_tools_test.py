@@ -185,7 +185,7 @@ def test_verbose(venv, capsys):
     run(venv.before, venv.after, args=('--verbose',))
     out, _ = capsys.readouterr()
     # Lots of output
-    assert len(out.splitlines()) > 25
+    assert len(out.splitlines()) > 10
 
 
 def test_non_absolute_error(capsys):

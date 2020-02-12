@@ -31,7 +31,7 @@ ACTIVATION_SCRIPTS = [
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^\d+.\d+$')
 _activation_path_re = re.compile(
-    r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =]"(.*?)"\s*$',
+    r'^(?:set -gx |setenv |)VIRTUAL_ENV[ =][\'"](.*?)[\'"]\s*$',
 )
 VERBOSE = False
 MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
@@ -169,7 +169,11 @@ def update_pycs(lib_dir, new_path):
 
     for dirname, dirnames, filenames in os.walk(lib_dir):
         for filename in filenames:
-            if filename.endswith(('.pyc', '.pyo')):
+            if (
+                    filename.endswith(('.pyc', '.pyo')) and
+                    # python 2, virtualenv 20.x symlinks os.pyc
+                    not os.path.islink(os.path.join(dirname, filename))
+            ):
                 filename = os.path.join(dirname, filename)
                 local_path = get_new_path(filename)
                 update_pyc(filename, local_path)
@@ -236,11 +240,13 @@ def get_orig_path(venv_path):
 
     with open(activate_path) as activate:
         for line in activate:
-            if line.startswith('VIRTUAL_ENV="'):
-                return line.split('"', 2)[1]
+            # virtualenv 20 changes the position
+            for possible in ('VIRTUAL_ENV="', "VIRTUAL_ENV='"):
+                if line.startswith(possible):
+                    return line.split(possible[-1], 2)[1]
         else:
             raise AssertionError(
-                'Could not find VIRTUAL_ENV=" in activation script: %s' %
+                'Could not find VIRTUAL_ENV= in activation script: %s' %
                 activate_path
             )
 
