@@ -8,11 +8,12 @@ setup(
     name='virtualenv-tools3',
     author='Fireteam Ltd.; Yelp, Inc.',
     author_email='opensource@yelp.com',
-    version='2.0.2',
+    version='2.0.3',
     url='http://github.com/Yelp/virtualenv-tools',
     py_modules=['virtualenv_tools'],
     description='A set of tools for virtualenv',
     long_description=readme,
+    long_description_content_type='text/markdown',
     entry_points={
         'console_scripts': [
             'virtualenv-tools = virtualenv_tools:main'
