@@ -126,21 +126,22 @@ def update_pyc(filename, new_path):
 
     def _make_code(code, filename, consts):
         if sys.version_info[0] == 2:  # pragma: no cover (PY2)
-            arglist = [
+            return CodeType(
                 code.co_argcount, code.co_nlocals, code.co_stacksize,
                 code.co_flags, code.co_code, tuple(consts), code.co_names,
                 code.co_varnames, filename, code.co_name, code.co_firstlineno,
                 code.co_lnotab, code.co_freevars, code.co_cellvars,
-            ]
-        else:  # pragma: no cover (PY3)
-            arglist = [
+            )
+        elif sys.version_info < (3, 8):  # pragma: no cover (<py38)
+            return CodeType(
                 code.co_argcount, code.co_kwonlyargcount, code.co_nlocals,
                 code.co_stacksize, code.co_flags, code.co_code, tuple(consts),
                 code.co_names, code.co_varnames, filename, code.co_name,
                 code.co_firstlineno, code.co_lnotab, code.co_freevars,
                 code.co_cellvars,
-            ]
-        return CodeType(*arglist)
+            )
+        else:  # pragma: no cover (py38+)
+            return code.replace(co_consts=tuple(consts), co_filename=filename)
 
     def _process(code):
         consts = []
