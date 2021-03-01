@@ -403,7 +403,10 @@ def main(argv=None):
     parser.add_argument(
         '--base-python-dir',
         help=(
-            'A directory pointing to a valid Python installation. The virtualenv will load standard libraries from here.'
+            'A directory pointing to a valid Python installation. '
+            'The virtualenv will load standard libraries from here.'
+            'This is needed to update pyvenv.cfg'
+            'If omitted or set to "auto", the default python3 will be used.'
         ),
     )
     parser.add_argument(
@@ -431,8 +434,11 @@ def main(argv=None):
         print('--update-path must be absolute: {}'.format(update_path))
         return 1
 
-    if not os.path.isabs(args.base_python_dir):
-        print('--base-python-dir must be absolute: {}'.format(args.base_python_dir))
+    base_python_dir = args.base_python_dir
+    if base_python_dir is None or base_python_dir == 'auto':
+        base_python_dir = sys.executable
+    elif not os.path.isabs(base_python_dir):
+        print('--base-python-dir must be absolute: {}'.format(base_python_dir))
         return 1
 
     try:
@@ -445,7 +451,7 @@ def main(argv=None):
         print('Already up-to-date: %s (%s)' % (venv.path, update_path))
         return 0
 
-    update_paths(venv, update_path, args.base_python_dir)
+    update_paths(venv, update_path, base_python_dir)
     print('Updated: %s (%s -> %s)' % (venv.path, venv.orig_path, update_path))
     return 0
 
