@@ -163,9 +163,9 @@ def update_pyc(filename, new_path):
         magic = f.read(MAGIC_LENGTH)
         try:
             code = marshal.load(f)
-        except Exception as err:
-            print('Error loading %s: %s' % (filename, err))
-            return
+        except Exception:
+            print('Error in %s' % filename)
+            raise
 
     def _make_code(code, filename, consts):
         if sys.version_info[0] == 2:  # pragma: no cover (PY2)
