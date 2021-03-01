@@ -388,6 +388,12 @@ def _get_original_state(path):
         pyvenv_cfg_file=pyvenv_cfg_file,
     )
 
+def _get_virtualenv_path(path):
+    workon_home = os.getenv("WORKON_HOME")
+    if workon_home is not None:
+        env_path = os.path.join(workon_home, path)
+        return env_path, True
+    return path, False
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
@@ -397,7 +403,9 @@ def main(argv=None):
         help=(
             'Update the path for all required executables and helper files '
             'that are supported to the new python prefix.  You can also set '
-            'this to "auto" for autodetection.'
+            'this to "auto" for autodetection (use the absolute path of path arg).'
+            'If a virtualenv name is given and "WORKON_HOME" is set, it will update'
+            'this virtualenv otherwise fallback to path arg.'
         ),
     )
     parser.add_argument(
@@ -425,10 +433,11 @@ def main(argv=None):
     global VERBOSE
     VERBOSE = args.verbose
 
+    venv = False
     if args.update_path == 'auto':
         update_path = os.path.abspath(args.path)
     else:
-        update_path = args.update_path
+        update_path, venv = _get_virtualenv_path(args.update_path)
 
     if not os.path.isabs(update_path):
         print('--update-path must be absolute: {}'.format(update_path))
@@ -441,8 +450,11 @@ def main(argv=None):
         print('--base-python-dir must be absolute: {}'.format(base_python_dir))
         return 1
 
+    path = args.path
+    if venv:
+        path = update_path
     try:
-        venv = _get_original_state(path=args.path)
+        venv = _get_original_state(path=path)
     except NotAVirtualenvError as e:
         print(e)
         return 1
