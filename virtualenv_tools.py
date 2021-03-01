@@ -36,7 +36,7 @@ ACTIVATION_SCRIPTS = [
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^\d+.\d+$')
 _activation_path_re = re.compile(
-    r'^(?:set -gx |setenv |set "|)VIRTUAL_ENV[ =][\'"](.*?)[\'"]\s*$',
+    r'^(?:set -gx |setenv |set \"|)VIRTUAL_ENV[ =][\'\"]*(.*?)[\'\"]*\s*$'
 )
 VERBOSE = False
 MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
