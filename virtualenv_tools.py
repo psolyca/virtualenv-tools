@@ -80,11 +80,8 @@ def update_activation_script(script_filename, new_path):
 def path_is_within(path, within):
     try:
         relpath = os.path.relpath(path, within)
-    except ValueError:
-        if IS_WINDOWS:  # paths aren't on the same drive
-            return False
-
-        raise
+    except ValueError: # Only on Windows
+        return False
 
     return not relpath.startswith(b".")
 
