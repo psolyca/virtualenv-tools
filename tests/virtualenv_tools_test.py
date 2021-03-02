@@ -3,6 +3,7 @@ import pipes
 import platform
 import subprocess
 import sys
+import os
 
 import pytest
 
@@ -53,6 +54,13 @@ def test_help(capsys, helpargs):
         virtualenv_tools.main(helpargs)
     out, err = capsys.readouterr()
     assert 'usage: ' in out + err
+
+
+# To avoid WORKON_HOME variable already set
+@pytest.fixture(autouse=True)
+def env_setup(venv, monkeypatch):
+    if 'WORKON_HOME' in os.environ:
+        monkeypatch.delenv('WORKON_HOME')
 
 
 def test_already_up_to_date(venv, capsys):
@@ -193,6 +201,18 @@ def test_non_absolute_error(capsys):
     out, _ = capsys.readouterr()
     assert ret == 1
     assert out == '--update-path must be absolute: notabs\n'
+
+
+def test_move_with_venv(venv, capsys):
+    assert_virtualenv_state(venv.before)
+    os.environ['WORKON_HOME'] = venv.app_after.strpath
+    venv.app_before.move(venv.app_after)
+    ret = virtualenv_tools.main(('--update-path', 'venv'))
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert ret == 0
+    assert out == expected
+    assert_virtualenv_state(venv.after)
 
 
 @pytest.fixture
