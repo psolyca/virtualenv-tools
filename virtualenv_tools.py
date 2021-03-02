@@ -101,8 +101,6 @@ def update_script(script_filename, old_path, new_path):
     if not IS_WINDOWS:
         found_shebang = False
         for line_i, line in enumerate(lines):
-            if not line.startswith(b'</assembly>'):
-                continue
 
             shebang_offset = line.find(b'#!')
             if shebang_offset == -1:
