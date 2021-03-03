@@ -241,6 +241,7 @@ def test_move_with_pyvencfg(venv, capsys):
     assert pyvenv_content[0] == expected
     assert_virtualenv_state(venv.after)
 
+
 @pytest.fixture
 def fake_venv(tmpdir):
     tmpdir.join('bin').ensure_dir()

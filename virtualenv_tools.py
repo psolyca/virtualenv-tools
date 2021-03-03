@@ -16,7 +16,6 @@ import argparse
 import collections
 import marshal
 import os
-import os.path
 import re
 import shutil
 import sys
@@ -106,7 +105,7 @@ def update_script(script_filename, old_path, new_path):
             if shebang_offset == -1:
                 continue
 
-            args = lines[line_i][shebang_offset + 2 :].strip().split()
+            args = lines[line_i][shebang_offset + 2:].strip().split()
             if not args:
                 continue
 
@@ -383,12 +382,14 @@ def _get_original_state(path):
         pyvenv_cfg_file=pyvenv_cfg_file,
     )
 
+
 def _get_virtualenv_path(path):
     workon_home = os.getenv("WORKON_HOME")
     if workon_home is not None:
         env_path = os.path.join(workon_home, path)
         return env_path, True
     return path, False
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
