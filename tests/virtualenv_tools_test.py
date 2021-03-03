@@ -1,4 +1,5 @@
 import collections
+import os
 import pipes
 import platform
 import subprocess
@@ -53,6 +54,13 @@ def test_help(capsys, helpargs):
         virtualenv_tools.main(helpargs)
     out, err = capsys.readouterr()
     assert 'usage: ' in out + err
+
+
+# To avoid WORKON_HOME variable already set
+@pytest.fixture(autouse=True)
+def env_setup(venv, monkeypatch):
+    if 'WORKON_HOME' in os.environ:
+        monkeypatch.delenv('WORKON_HOME')
 
 
 def test_already_up_to_date(venv, capsys):
@@ -188,11 +196,50 @@ def test_verbose(venv, capsys):
     assert len(out.splitlines()) > 10
 
 
-def test_non_absolute_error(capsys):
+def test_non_absolute_error_update_path(capsys):
     ret = virtualenv_tools.main(('--update-path', 'notabs'))
     out, _ = capsys.readouterr()
     assert ret == 1
     assert out == '--update-path must be absolute: notabs\n'
+
+
+def test_non_absolute_error_base_python_dir(venv, capsys):
+    ret = virtualenv_tools.main((
+        '--base-python-dir=.',
+        '--update-path=auto',
+        venv.after.strpath,
+    ))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    assert out == '--base-python-dir must be absolute: .\n'
+
+
+def test_move_with_venv(venv, capsys):
+    assert_virtualenv_state(venv.before)
+    os.environ['WORKON_HOME'] = venv.app_after.strpath
+    venv.app_before.move(venv.app_after)
+    ret = virtualenv_tools.main(('--update-path', 'venv'))
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert ret == 0
+    assert out == expected
+    assert_virtualenv_state(venv.after)
+
+
+def test_move_with_pyvencfg(venv, capsys):
+    assert_virtualenv_state(venv.before)
+    venv.app_before.move(venv.app_after)
+    ret = virtualenv_tools.main((
+        '--base-python-dir=/usr/bin/python',
+        '--update-path=auto',
+        venv.after.strpath,
+    ))
+    pyvenv = venv.after.join('pyvenv.cfg')
+    pyvenv_content = pyvenv.readlines()
+    expected = 'home = /usr/bin/python\n'
+    assert ret == 0
+    assert pyvenv_content[0] == expected
+    assert_virtualenv_state(venv.after)
 
 
 @pytest.fixture

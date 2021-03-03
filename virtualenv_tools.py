@@ -16,7 +16,6 @@ import argparse
 import collections
 import marshal
 import os
-import os.path
 import re
 import shutil
 import sys
@@ -78,13 +77,10 @@ def update_activation_script(script_filename, new_path):
 
 
 def path_is_within(path, within):
-    try:
+    try:  # pragma: no cover (Windows only)
         relpath = os.path.relpath(path, within)
-    except ValueError:
-        if IS_WINDOWS:  # paths aren't on the same drive
-            return False
-
-        raise
+    except ValueError:  # pragma: no cover (Windows only)
+        return False
 
     return not relpath.startswith(b".")
 
@@ -104,14 +100,12 @@ def update_script(script_filename, old_path, new_path):
     if not IS_WINDOWS:
         found_shebang = False
         for line_i, line in enumerate(lines):
-            if not line.startswith(b'</assembly>'):
-                continue
 
             shebang_offset = line.find(b'#!')
             if shebang_offset == -1:
                 continue
 
-            args = lines[line_i][shebang_offset + 2 :].strip().split()
+            args = lines[line_i][shebang_offset + 2:].strip().split()
             if not args:
                 continue
 
@@ -127,7 +121,7 @@ def update_script(script_filename, old_path, new_path):
 
         if not found_shebang:
             return
-    else:
+    else:  # pragma: no cover (Windows only)
         line_offset = 0
         args_offset = 2
 
@@ -234,9 +228,9 @@ def _update_pth_file(pth_filename, orig_path, is_pypy):
         changed = True
         relto_original = os.path.relpath(val, orig_path)
 
-        if is_pypy:
+        if is_pypy:  # pragma: no cover (pypy only)
             rel = '..'  # venv/site-packages
-        elif IS_WINDOWS:
+        elif IS_WINDOWS:  # pragma: no cover (Windows only)
             rel = '../..'  # venv/Lib/site-packages
         else:
             rel = '../../..'  # venv/lib/pythonX.X/site-packages
@@ -262,7 +256,7 @@ def update_pyvenv_cfg(pyvenv_cfg, new_path):
         lines = list(f)
 
     changed = False
-    for line_i, line in enumerate(lines):
+    for line_i, line in enumerate(lines):  # pragma: no cover (covered by test_move_with_pyvencfg)
         key, value = line.split('=')
         if key.strip() != 'home':
             continue
@@ -271,7 +265,7 @@ def update_pyvenv_cfg(pyvenv_cfg, new_path):
         changed = True
         break
 
-    if not changed:
+    if not changed:  # pragma: no cover (covered by test_move_with_pyvencfg)
         return
 
     with open(pyvenv_cfg, 'w') as f:
@@ -295,7 +289,7 @@ def update_paths(venv, new_path, base_python_dir=None):
     for lib_dir in [venv.bin_dir, *venv.lib_dirs]:
         update_pycs(lib_dir, new_path)
     update_pth_files(venv.site_packages, venv.orig_path, venv.is_pypy)
-    if base_python_dir:
+    if base_python_dir:  # pragma: no cover (covered by test_move_with_pyvencfg)
         update_pyvenv_cfg(venv.pyvenv_cfg_file, base_python_dir)
     remove_local(venv.path)
     update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
@@ -354,7 +348,7 @@ def _get_original_state(path):
     if not os.path.isfile(activate_file):
         raise NotAVirtualenvError(path, 'file', activate_file)
 
-    if IS_WINDOWS:
+    if IS_WINDOWS:  # pragma: no cover (Windows only)
         lib_dir = base_lib_dir
     else:
         matcher = _pypy_match if is_pypy else _pybin_match
@@ -388,12 +382,14 @@ def _get_original_state(path):
         pyvenv_cfg_file=pyvenv_cfg_file,
     )
 
+
 def _get_virtualenv_path(path):
     workon_home = os.getenv("WORKON_HOME")
     if workon_home is not None:
         env_path = os.path.join(workon_home, path)
         return env_path, True
     return path, False
+
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
