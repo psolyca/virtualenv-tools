@@ -1,9 +1,9 @@
 import collections
+import os
 import pipes
 import platform
 import subprocess
 import sys
-import os
 
 import pytest
 
