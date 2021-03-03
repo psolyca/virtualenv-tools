@@ -36,7 +36,7 @@ ACTIVATION_SCRIPTS = [
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^\d+.\d+$')
 _activation_path_re = re.compile(
-    r'^(?:set -gx |setenv |set "|)VIRTUAL_ENV[ =][\'"](.*?)[\'"]\s*$',
+    r'^(?:set -gx |setenv |set \"|)VIRTUAL_ENV[ =][\'\"]*(.*?)[\'\"]*\s*$'
 )
 VERBOSE = False
 MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
@@ -163,9 +163,9 @@ def update_pyc(filename, new_path):
         magic = f.read(MAGIC_LENGTH)
         try:
             code = marshal.load(f)
-        except Exception as err:
-            print('Error loading %s: %s' % (filename, err))
-            return
+        except Exception:
+            print('Error in %s' % filename)
+            raise
 
     def _make_code(code, filename, consts):
         if sys.version_info[0] == 2:  # pragma: no cover (PY2)
@@ -388,6 +388,12 @@ def _get_original_state(path):
         pyvenv_cfg_file=pyvenv_cfg_file,
     )
 
+def _get_virtualenv_path(path):
+    workon_home = os.getenv("WORKON_HOME")
+    if workon_home is not None:
+        env_path = os.path.join(workon_home, path)
+        return env_path, True
+    return path, False
 
 def main(argv=None):
     parser = argparse.ArgumentParser()
@@ -397,13 +403,18 @@ def main(argv=None):
         help=(
             'Update the path for all required executables and helper files '
             'that are supported to the new python prefix.  You can also set '
-            'this to "auto" for autodetection.'
+            'this to "auto" for autodetection (use the absolute path of path arg).'
+            'If a virtualenv name is given and "WORKON_HOME" is set, it will update'
+            'this virtualenv otherwise fallback to path arg.'
         ),
     )
     parser.add_argument(
         '--base-python-dir',
         help=(
-            'A directory pointing to a valid Python installation. The virtualenv will load standard libraries from here.'
+            'A directory pointing to a valid Python installation. '
+            'The virtualenv will load standard libraries from here.'
+            'This is needed to update pyvenv.cfg'
+            'If omitted or set to "auto", the default python3 will be used.'
         ),
     )
     parser.add_argument(
@@ -422,21 +433,28 @@ def main(argv=None):
     global VERBOSE
     VERBOSE = args.verbose
 
+    venv = False
     if args.update_path == 'auto':
         update_path = os.path.abspath(args.path)
     else:
-        update_path = args.update_path
+        update_path, venv = _get_virtualenv_path(args.update_path)
 
     if not os.path.isabs(update_path):
         print('--update-path must be absolute: {}'.format(update_path))
         return 1
 
-    if not os.path.isabs(args.base_python_dir):
-        print('--base-python-dir must be absolute: {}'.format(args.base_python_dir))
+    base_python_dir = args.base_python_dir
+    if base_python_dir is None or base_python_dir == 'auto':
+        base_python_dir = sys.executable
+    elif not os.path.isabs(base_python_dir):
+        print('--base-python-dir must be absolute: {}'.format(base_python_dir))
         return 1
 
+    path = args.path
+    if venv:
+        path = update_path
     try:
-        venv = _get_original_state(path=args.path)
+        venv = _get_original_state(path=path)
     except NotAVirtualenvError as e:
         print(e)
         return 1
@@ -445,7 +463,7 @@ def main(argv=None):
         print('Already up-to-date: %s (%s)' % (venv.path, update_path))
         return 0
 
-    update_paths(venv, update_path, args.base_python_dir)
+    update_paths(venv, update_path, base_python_dir)
     print('Updated: %s (%s -> %s)' % (venv.path, venv.orig_path, update_path))
     return 0
 

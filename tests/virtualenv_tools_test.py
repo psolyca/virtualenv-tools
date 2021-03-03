@@ -13,7 +13,7 @@ def auto_namedtuple(**kwargs):
     return collections.namedtuple('ns', tuple(kwargs))(**kwargs)
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def venv(tmpdir):
     app_before = tmpdir.join('before').ensure_dir()
     app_before.join('mymodule.py').write(
@@ -195,7 +195,7 @@ def test_non_absolute_error(capsys):
     assert out == '--update-path must be absolute: notabs\n'
 
 
-@pytest.yield_fixture
+@pytest.fixture
 def fake_venv(tmpdir):
     tmpdir.join('bin').ensure_dir()
     tmpdir.join('lib/python2.7/site-packages').ensure_dir()
