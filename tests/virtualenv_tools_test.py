@@ -196,11 +196,22 @@ def test_verbose(venv, capsys):
     assert len(out.splitlines()) > 10
 
 
-def test_non_absolute_error(capsys):
+def test_non_absolute_error_update_path(capsys):
     ret = virtualenv_tools.main(('--update-path', 'notabs'))
     out, _ = capsys.readouterr()
     assert ret == 1
     assert out == '--update-path must be absolute: notabs\n'
+
+
+def test_non_absolute_error_base_python_dir(venv, capsys):
+    ret = virtualenv_tools.main((
+        '--base-python-dir=.',
+        '--update-path=auto',
+        venv.after.strpath,
+    ))
+    out, _ = capsys.readouterr()
+    assert ret == 1
+    assert out == '--base-python-dir must be absolute: .\n'
 
 
 def test_move_with_venv(venv, capsys):
