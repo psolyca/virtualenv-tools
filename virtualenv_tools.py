@@ -31,6 +31,8 @@ ACTIVATION_SCRIPTS = [
     'activate.xsh',
     'activate.bat',
     'Activate.ps1',
+    'activate.ps1',
+    'activate_this.py'
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^\d+.\d+$')
