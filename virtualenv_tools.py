@@ -256,7 +256,7 @@ def update_pyvenv_cfg(pyvenv_cfg, new_path):
 
     changed = False
     for line_i, line in enumerate(lines):  # pragma: no cover (covered by test_move_with_pyvencfg)
-        key, value = line.split('=')
+        key, path = line.split('=')
         if key.strip() != 'home':
             continue
 
@@ -265,6 +265,9 @@ def update_pyvenv_cfg(pyvenv_cfg, new_path):
         break
 
     if not changed:  # pragma: no cover (covered by test_move_with_pyvencfg)
+        return
+
+    if path.strip() == new_path:
         return
 
     with open(pyvenv_cfg, 'w') as f:
