@@ -415,7 +415,8 @@ def main(argv=None):
     parser.add_argument(
         '--base-python-dir',
         help=(
-            'A directory pointing to a valid Python installation. '
+            'On Windows, a directory pointing to a valid Python installation.'
+            'On *nux, a valid Python executable.'
             'The virtualenv will load standard libraries from here.'
             'This is needed to update pyvenv.cfg'
             'If omitted or set to "auto", the default python3 will be used.'
@@ -455,6 +456,11 @@ def main(argv=None):
     elif not os.path.isabs(base_python_dir):
         print('--base-python-dir must be absolute: {}'.format(base_python_dir))
         return 1
+
+    # On Windows, executable is a copy and is not a symlink (not recommended)
+    # On *nux, executable could be a symlink
+    # On Windows, home is a directory, on *nux, home is an executable
+    base_python_dir = os.path.dirname(base_python_dir) if IS_WINDOWS else base_python_dir
 
     path = _get_realpath(args.path)
     if venv:
