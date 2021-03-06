@@ -106,42 +106,29 @@ def update_script(script_filename, old_path, new_path):
         f.seek(0)
         lines = list(f)
 
-    if not IS_WINDOWS:
-        found_shebang = False
-        for line_i, line in enumerate(lines):
+    found_shebang = False
+    for line_i, line in enumerate(lines):
 
-            shebang_offset = line.find(b'#!')
-            if shebang_offset == -1:
-                continue
+        shebang_offset = line.find(b'#!')
+        if shebang_offset == -1:
+            continue
 
-            args = lines[line_i][shebang_offset + 2:].strip().split()
-            if not args:
-                continue
-
-            if not path_is_within(args[0], old_path):
-                continue
-
-            new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
-
-            line_offset = line_i
-            args_offset = shebang_offset + 2
-            found_shebang = True
-            break
-
-        if not found_shebang:
-            return
-    else:  # pragma: no cover (Windows only)
-        line_offset = 0
-        args_offset = 2
-
-        args = lines[line_offset][args_offset:].strip().split()
+        args = lines[line_i][shebang_offset + 2:].strip().split()
         if not args:
-            return
+            continue
 
         if not path_is_within(args[0], old_path):
-            return
+            continue
 
         new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+
+        line_offset = line_i
+        args_offset = shebang_offset + 2
+        found_shebang = True
+        break
+
+    if not found_shebang:
+        return
 
     args[0] = new_bin
     lines[line_offset] = lines[line_offset][:args_offset] + b" ".join(args) + b"\n"
