@@ -150,11 +150,11 @@ def update_script(script_filename, old_path, new_path):
         f.writelines(lines)
 
 
-def update_scripts(bin_dir, orig_path, new_path, activation=False):
+def update_scripts(bin_dir, orig_path, new_path):
     """Updates all scripts in the bin folder."""
     for fname in os.listdir(bin_dir):
         path = os.path.join(bin_dir, fname)
-        if fname in ACTIVATION_SCRIPTS and activation:
+        if fname in ACTIVATION_SCRIPTS:
             update_activation_script(path, new_path)
         elif os.path.isfile(path):
             update_script(path, orig_path, new_path)
@@ -294,14 +294,13 @@ def remove_local(base):
 
 def update_paths(venv, new_path, base_python_dir=None):
     """Updates all paths in a virtualenv to a new one."""
-    update_scripts(venv.bin_dir, venv.orig_path, new_path)
     for lib_dir in [venv.bin_dir, *venv.lib_dirs]:
         update_pycs(lib_dir, new_path)
     update_pth_files(venv.site_packages, venv.orig_path, venv.is_pypy)
     if base_python_dir:  # pragma: no cover (covered by test_move_with_pyvencfg)
         update_pyvenv_cfg(venv.pyvenv_cfg_file, base_python_dir)
     remove_local(venv.path)
-    update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
+    update_scripts(venv.bin_dir, venv.orig_path, new_path)
 
 
 def get_orig_path(venv_path):
