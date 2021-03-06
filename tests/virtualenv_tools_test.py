@@ -242,6 +242,15 @@ def test_move_with_pyvencfg(venv, capsys):
     assert_virtualenv_state(venv.after)
 
 
+def test_shebang_cmd_relative(venv, capsys):
+    bad_shebang = venv.before.join('bin', 'bad_shebang')
+    bad_shebang.write('#!../bin/python\n')
+    run(venv.before, venv.after)
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert out == expected
+
+
 @pytest.fixture
 def fake_venv(tmpdir):
     tmpdir.join('bin').ensure_dir()
