@@ -117,6 +117,9 @@ def update_script(script_filename, old_path, new_path):
         if not args:
             continue
 
+        if not os.path.isabs(args[0]):
+            continue
+
         if not path_is_within(args[0], old_path):
             continue
 
