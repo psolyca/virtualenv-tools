@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import sys
+from pathlib import Path
 from types import CodeType
 
 IS_WINDOWS = os.name == "nt"
@@ -52,6 +53,12 @@ if sys.version_info >= (3, 7):  # pragma: no cover (PY37+)
 def debug(msg):
     if VERBOSE:
         print(msg)
+
+
+def _get_realpath(path):
+    if os.path.exists(path):
+        return str(Path(path).resolve())
+    return path
 
 
 def update_activation_script(script_filename, new_path):
@@ -379,7 +386,7 @@ def _get_original_state(path):
         bin_dir=bin_dir,
         lib_dirs=lib_dirs,
         site_packages=site_packages,
-        orig_path=get_orig_path(path),
+        orig_path=_get_realpath(get_orig_path(path)),
         is_pypy=is_pypy,
         pyvenv_cfg_file=pyvenv_cfg_file,
     )
@@ -441,6 +448,8 @@ def main(argv=None):
         print('--update-path must be absolute: {}'.format(update_path))
         return 1
 
+    update_path = _get_realpath(update_path)
+
     base_python_dir = args.base_python_dir
     if base_python_dir is None or base_python_dir == 'auto':
         base_python_dir = sys.executable
@@ -448,7 +457,7 @@ def main(argv=None):
         print('--base-python-dir must be absolute: {}'.format(base_python_dir))
         return 1
 
-    path = args.path
+    path = _get_realpath(args.path)
     if venv:
         path = update_path
     try:
