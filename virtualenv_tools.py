@@ -19,6 +19,7 @@ import os
 import re
 import shutil
 import sys
+from pathlib import Path
 from types import CodeType
 
 IS_WINDOWS = os.name == "nt"
@@ -31,6 +32,8 @@ ACTIVATION_SCRIPTS = [
     'activate.xsh',
     'activate.bat',
     'Activate.ps1',
+    'activate.ps1',
+    'activate_this.py'
 ]
 _pybin_match = re.compile(r'^python\d+\.\d+$')
 _pypy_match = re.compile(r'^\d+.\d+$')
@@ -50,6 +53,12 @@ if sys.version_info >= (3, 7):  # pragma: no cover (PY37+)
 def debug(msg):
     if VERBOSE:
         print(msg)
+
+
+def _get_realpath(path):
+    if os.path.exists(path):
+        return str(Path(path).resolve())
+    return path
 
 
 def update_activation_script(script_filename, new_path):
@@ -97,42 +106,32 @@ def update_script(script_filename, old_path, new_path):
         f.seek(0)
         lines = list(f)
 
-    if not IS_WINDOWS:
-        found_shebang = False
-        for line_i, line in enumerate(lines):
+    found_shebang = False
+    for line_i, line in enumerate(lines):
 
-            shebang_offset = line.find(b'#!')
-            if shebang_offset == -1:
-                continue
+        shebang_offset = line.find(b'#!')
+        if shebang_offset == -1:
+            continue
 
-            args = lines[line_i][shebang_offset + 2:].strip().split()
-            if not args:
-                continue
-
-            if not path_is_within(args[0], old_path):
-                continue
-
-            new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
-
-            line_offset = line_i
-            args_offset = shebang_offset + 2
-            found_shebang = True
-            break
-
-        if not found_shebang:
-            return
-    else:  # pragma: no cover (Windows only)
-        line_offset = 0
-        args_offset = 2
-
-        args = lines[line_offset][args_offset:].strip().split()
+        args = lines[line_i][shebang_offset + 2:].strip().split()
         if not args:
-            return
+            continue
+
+        if not os.path.isabs(args[0]):
+            continue
 
         if not path_is_within(args[0], old_path):
-            return
+            continue
 
         new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+
+        line_offset = line_i
+        args_offset = shebang_offset + 2
+        found_shebang = True
+        break
+
+    if not found_shebang:
+        return
 
     args[0] = new_bin
     lines[line_offset] = lines[line_offset][:args_offset] + b" ".join(args) + b"\n"
@@ -141,11 +140,11 @@ def update_script(script_filename, old_path, new_path):
         f.writelines(lines)
 
 
-def update_scripts(bin_dir, orig_path, new_path, activation=False):
+def update_scripts(bin_dir, orig_path, new_path):
     """Updates all scripts in the bin folder."""
     for fname in os.listdir(bin_dir):
         path = os.path.join(bin_dir, fname)
-        if fname in ACTIVATION_SCRIPTS and activation:
+        if fname in ACTIVATION_SCRIPTS:
             update_activation_script(path, new_path)
         elif os.path.isfile(path):
             update_script(path, orig_path, new_path)
@@ -257,7 +256,7 @@ def update_pyvenv_cfg(pyvenv_cfg, new_path):
 
     changed = False
     for line_i, line in enumerate(lines):  # pragma: no cover (covered by test_move_with_pyvencfg)
-        key, value = line.split('=')
+        key, path = line.split('=')
         if key.strip() != 'home':
             continue
 
@@ -268,8 +267,12 @@ def update_pyvenv_cfg(pyvenv_cfg, new_path):
     if not changed:  # pragma: no cover (covered by test_move_with_pyvencfg)
         return
 
+    if path.strip() == new_path:
+        return
+
     with open(pyvenv_cfg, 'w') as f:
         f.writelines(lines)
+    debug('C {}'.format(pyvenv_cfg))
 
 
 def remove_local(base):
@@ -285,14 +288,13 @@ def remove_local(base):
 
 def update_paths(venv, new_path, base_python_dir=None):
     """Updates all paths in a virtualenv to a new one."""
-    update_scripts(venv.bin_dir, venv.orig_path, new_path)
     for lib_dir in [venv.bin_dir, *venv.lib_dirs]:
         update_pycs(lib_dir, new_path)
     update_pth_files(venv.site_packages, venv.orig_path, venv.is_pypy)
     if base_python_dir:  # pragma: no cover (covered by test_move_with_pyvencfg)
         update_pyvenv_cfg(venv.pyvenv_cfg_file, base_python_dir)
     remove_local(venv.path)
-    update_scripts(venv.bin_dir, venv.orig_path, new_path, activation=True)
+    update_scripts(venv.bin_dir, venv.orig_path, new_path)
 
 
 def get_orig_path(venv_path):
@@ -377,7 +379,7 @@ def _get_original_state(path):
         bin_dir=bin_dir,
         lib_dirs=lib_dirs,
         site_packages=site_packages,
-        orig_path=get_orig_path(path),
+        orig_path=_get_realpath(get_orig_path(path)),
         is_pypy=is_pypy,
         pyvenv_cfg_file=pyvenv_cfg_file,
     )
@@ -407,7 +409,8 @@ def main(argv=None):
     parser.add_argument(
         '--base-python-dir',
         help=(
-            'A directory pointing to a valid Python installation. '
+            'On Windows, a directory pointing to a valid Python installation.'
+            'On *nux, a valid Python executable.'
             'The virtualenv will load standard libraries from here.'
             'This is needed to update pyvenv.cfg'
             'If omitted or set to "auto", the default python3 will be used.'
@@ -439,6 +442,8 @@ def main(argv=None):
         print('--update-path must be absolute: {}'.format(update_path))
         return 1
 
+    update_path = _get_realpath(update_path)
+
     base_python_dir = args.base_python_dir
     if base_python_dir is None or base_python_dir == 'auto':
         base_python_dir = sys.executable
@@ -446,7 +451,12 @@ def main(argv=None):
         print('--base-python-dir must be absolute: {}'.format(base_python_dir))
         return 1
 
-    path = args.path
+    # On Windows, executable is a copy and is not a symlink (not recommended)
+    # On *nux, executable could be a symlink
+    # On Windows, home is a directory, on *nux, home is an executable
+    base_python_dir = os.path.dirname(base_python_dir) if IS_WINDOWS else base_python_dir
+
+    path = _get_realpath(args.path)
     if venv:
         path = update_path
     try:

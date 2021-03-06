@@ -160,6 +160,34 @@ def test_move_with_auto(venv, capsys):
     assert_virtualenv_state(venv.after)
 
 
+def test_move_with_venv(venv, capsys):
+    assert_virtualenv_state(venv.before)
+    os.environ['WORKON_HOME'] = venv.app_after.strpath
+    venv.app_before.move(venv.app_after)
+    ret = virtualenv_tools.main(('--update-path', 'venv'))
+    out, _ = capsys.readouterr()
+    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
+    assert ret == 0
+    assert out == expected
+    assert_virtualenv_state(venv.after)
+
+
+def test_move_with_pyvencfg(venv, capsys):
+    assert_virtualenv_state(venv.before)
+    venv.app_before.move(venv.app_after)
+    ret = virtualenv_tools.main((
+        '--base-python-dir=/usr/bin/python',
+        '--update-path=auto',
+        venv.after.strpath,
+    ))
+    pyvenv = venv.after.join('pyvenv.cfg')
+    pyvenv_content = pyvenv.readlines()
+    expected = 'home = /usr/bin/python\n'
+    assert ret == 0
+    assert pyvenv_content[0] == expected
+    assert_virtualenv_state(venv.after)
+
+
 if platform.python_implementation() == 'PyPy':  # pragma: no cover (pypy)
     libdir_fmt = 'lib-python/{}.{}'
 else:  # pragma: no cover (non-pypy)
@@ -214,32 +242,13 @@ def test_non_absolute_error_base_python_dir(venv, capsys):
     assert out == '--base-python-dir must be absolute: .\n'
 
 
-def test_move_with_venv(venv, capsys):
-    assert_virtualenv_state(venv.before)
-    os.environ['WORKON_HOME'] = venv.app_after.strpath
-    venv.app_before.move(venv.app_after)
-    ret = virtualenv_tools.main(('--update-path', 'venv'))
+def test_shebang_cmd_relative(venv, capsys):
+    bad_shebang = venv.before.join('bin', 'bad_shebang')
+    bad_shebang.write('#!../bin/python\n')
+    run(venv.before, venv.after)
     out, _ = capsys.readouterr()
-    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
-    assert ret == 0
+    expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
     assert out == expected
-    assert_virtualenv_state(venv.after)
-
-
-def test_move_with_pyvencfg(venv, capsys):
-    assert_virtualenv_state(venv.before)
-    venv.app_before.move(venv.app_after)
-    ret = virtualenv_tools.main((
-        '--base-python-dir=/usr/bin/python',
-        '--update-path=auto',
-        venv.after.strpath,
-    ))
-    pyvenv = venv.after.join('pyvenv.cfg')
-    pyvenv_content = pyvenv.readlines()
-    expected = 'home = /usr/bin/python\n'
-    assert ret == 0
-    assert pyvenv_content[0] == expected
-    assert_virtualenv_state(venv.after)
 
 
 @pytest.fixture
