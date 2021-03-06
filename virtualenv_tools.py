@@ -279,6 +279,7 @@ def update_pyvenv_cfg(pyvenv_cfg, new_path):
 
     with open(pyvenv_cfg, 'w') as f:
         f.writelines(lines)
+    debug('C {}'.format(pyvenv_cfg))
 
 
 def remove_local(base):
