@@ -394,39 +394,54 @@ def _get_virtualenv_path(path):
 
 
 def main(argv=None):
-    parser = argparse.ArgumentParser()
+    parser = argparse.ArgumentParser(
+        description='Update paths in a virtualenv before/after moving it.',
+        epilog=(
+            'To be able to give a virtualenv name, WORKON_HOME variable must be set\n'
+        ),
+        formatter_class=argparse.RawTextHelpFormatter
+    )
     parser.add_argument(
-        '--update-path',
+        '-u', '--update-path',
         required=True,
         help=(
             'Update the path for all required executables and helper files '
-            'that are supported to the new python prefix.  You can also set '
-            'this to "auto" for autodetection (use the absolute path of path arg).'
+            'that are supported to the new python prefix.\n'
+            'You can set this to "auto" for autodetection.\n'
             'If a virtualenv name is given and "WORKON_HOME" is set, it will update'
-            'this virtualenv otherwise fallback to path arg.'
+            'this virtualenv otherwise fallback to path argument.'
         ),
     )
     parser.add_argument(
-        '--base-python-dir',
+        '-b', '--base-python-dir',
         help=(
-            'On Windows, a directory pointing to a valid Python installation.'
-            'On *nux, a valid Python executable.'
+            'On Windows, a directory pointing to a valid Python installation.\n'
+            'On *nux, a valid Python executable.\n'
             'The virtualenv will load standard libraries from here.'
             'This is needed to update pyvenv.cfg'
             'If omitted or set to "auto", the default python3 will be used.'
         ),
     )
     parser.add_argument(
-        '--force',
+        '-f', '--force',
         action='store_true',
         help=(
             'Continue processing even if the original path is the same as the updated path.'
         ),
     )
     parser.add_argument(
-        '--verbose', action='store_true', help='show a listing of changes"'
+        '-v', '--verbose',
+        action='store_true',
+        help='Show a listing of changes'
     )
-    parser.add_argument('path', default='.', nargs='?')
+    parser.add_argument(
+        'path',
+        default='.',
+        nargs='?',
+        help=(
+            'Default to "."'
+        )
+    )
     args = parser.parse_args(argv)
 
     global VERBOSE
