@@ -56,6 +56,7 @@ def debug(msg):
 
 
 def _get_realpath(path):
+    """Return real path without symlinks."""
     if os.path.exists(path):
         return str(Path(path).resolve())
     return path
