@@ -286,15 +286,15 @@ def remove_local(base):
         shutil.rmtree(local_dir)
 
 
-def update_paths(venv, new_path, base_python_dir=None):
+def update_paths(venv, base_python_dir=None):
     """Updates all paths in a virtualenv to a new one."""
     for lib_dir in [venv.bin_dir, *venv.lib_dirs]:
-        update_pycs(lib_dir, new_path)
+        update_pycs(lib_dir, venv.path)
     update_pth_files(venv.site_packages, venv.orig_path, venv.is_pypy)
     if base_python_dir:  # pragma: no cover (covered by test_move_with_pyvencfg)
         update_pyvenv_cfg(venv.pyvenv_cfg_file, base_python_dir)
     remove_local(venv.path)
-    update_scripts(venv.bin_dir, venv.orig_path, new_path)
+    update_scripts(venv.bin_dir, venv.orig_path, venv.path)
 
 
 def get_orig_path(venv_path):
@@ -337,7 +337,12 @@ Virtualenv = collections.namedtuple(
 )
 
 
-def _get_original_state(path):
+def _get_original_state(path, new_path=None):
+    workon_home = os.getenv("WORKON_HOME")
+    if workon_home is not None:
+        env_path = os.path.join(workon_home, path)
+        if os.path.exists(env_path):  # pragma: no cover
+            path = env_path
     is_pypy = os.path.isdir(os.path.join(path, 'lib_pypy'))
     bin_dir = os.path.join(path, BIN_DIR)
     base_lib_dir = os.path.join(path, 'lib-python' if is_pypy else 'lib')
@@ -375,7 +380,7 @@ def _get_original_state(path):
     if is_pypy:  # pragma: no cover (pypy only)
         lib_dirs.append(os.path.join(path, 'lib_pypy'))
     return Virtualenv(
-        path=path,
+        path=new_path if new_path is not None else path,
         bin_dir=bin_dir,
         lib_dirs=lib_dirs,
         site_packages=site_packages,
@@ -403,7 +408,6 @@ def main(argv=None):
     )
     parser.add_argument(
         '-u', '--update-path',
-        required=True,
         help=(
             'Update the path for all required executables and helper files '
             'that are supported to the new python prefix.\n'
@@ -436,7 +440,6 @@ def main(argv=None):
     )
     parser.add_argument(
         'path',
-        default='.',
         nargs='?',
         help=(
             'Default to "."'
@@ -447,17 +450,12 @@ def main(argv=None):
     global VERBOSE
     VERBOSE = args.verbose
 
-    venv = False
-    if args.update_path == 'auto':
-        update_path = os.path.abspath(args.path)
-    else:
-        update_path, venv = _get_virtualenv_path(args.update_path)
+    update_path = args.update_path
+    if update_path is not None:
 
-    if not os.path.isabs(update_path):
-        print('--update-path must be absolute: {}'.format(update_path))
-        return 1
-
-    update_path = _get_realpath(update_path)
+        if not os.path.isabs(update_path):
+            print('--update-path must be absolute: {}'.format(update_path))
+            return 1
 
     base_python_dir = args.base_python_dir
     if base_python_dir is None or base_python_dir == 'auto':
@@ -471,21 +469,26 @@ def main(argv=None):
     # On Windows, home is a directory, on *nux, home is an executable
     base_python_dir = os.path.dirname(base_python_dir) if IS_WINDOWS else base_python_dir
 
-    path = _get_realpath(args.path)
-    if venv:
-        path = update_path
-    try:
-        venv = _get_original_state(path=path)
-    except NotAVirtualenvError as e:
-        print(e)
-        return 1
+    if args.path is None:
+        try:
+            venv = _get_original_state(os.path.abspath('.'))
+        except NotAVirtualenvError:
+            parser.print_help()
+            raise SystemExit
+    else:
+        path = _get_realpath(args.path)
+        try:
+            venv = _get_original_state(path=path, new_path=update_path)
+        except NotAVirtualenvError as e:
+            print(e)
+            return 1
 
-    if not args.force and venv.orig_path == update_path:
-        print('Already up-to-date: %s (%s)' % (venv.path, update_path))
+    if not args.force and venv.orig_path == venv.path:
+        print('Already up-to-date: %s (%s)' % (venv.path, venv.orig_path))
         return 0
 
-    update_paths(venv, update_path, base_python_dir)
-    print('Updated: %s (%s -> %s)' % (venv.path, venv.orig_path, update_path))
+    update_paths(venv, base_python_dir)
+    print('Updated: %s (%s -> %s)' % (venv.orig_path, venv.orig_path, venv.path))
     return 0
 
 
