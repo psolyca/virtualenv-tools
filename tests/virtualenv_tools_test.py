@@ -150,23 +150,13 @@ def test_move_non_ascii_script(venv, capsys):
     assert_virtualenv_state(venv.after)
 
 
-def test_move_with_auto(venv, capsys):
-    venv.app_before.move(venv.app_after)
-    ret = virtualenv_tools.main(('--update-path=auto', venv.after.strpath))
-    out, _ = capsys.readouterr()
-    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
-    assert ret == 0
-    assert out == expected
-    assert_virtualenv_state(venv.after)
-
-
 def test_move_with_venv(venv, capsys):
     assert_virtualenv_state(venv.before)
     os.environ['WORKON_HOME'] = venv.app_after.strpath
     venv.app_before.move(venv.app_after)
-    ret = virtualenv_tools.main(('--update-path', 'venv'))
+    ret = virtualenv_tools.main(('venv',))
     out, _ = capsys.readouterr()
-    expected = 'Updated: {1} ({0} -> {1})\n'.format(venv.before, venv.after)
+    expected = 'Updated: {0} ({0} -> {1})\n'.format(venv.before, venv.after)
     assert ret == 0
     assert out == expected
     assert_virtualenv_state(venv.after)
@@ -177,7 +167,6 @@ def test_move_with_pyvencfg(venv, capsys):
     venv.app_before.move(venv.app_after)
     ret = virtualenv_tools.main((
         '--base-python-dir=/usr/bin/python',
-        '--update-path=auto',
         venv.after.strpath,
     ))
     pyvenv = venv.after.join('pyvenv.cfg')
@@ -234,8 +223,7 @@ def test_non_absolute_error_update_path(capsys):
 def test_non_absolute_error_base_python_dir(venv, capsys):
     ret = virtualenv_tools.main((
         '--base-python-dir=.',
-        '--update-path=auto',
-        venv.after.strpath,
+        venv.before.strpath,
     ))
     out, _ = capsys.readouterr()
     assert ret == 1
@@ -261,7 +249,7 @@ def fake_venv(tmpdir):
 
 def test_not_a_virtualenv_missing_site_packages(fake_venv, capsys):
     fake_venv.join('lib/python2.7/site-packages').remove()
-    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    ret = virtualenv_tools.main((fake_venv.strpath,))
     out, _ = capsys.readouterr()
     assert ret == 1
     expected = '{} is not a virtualenv: not a directory: {}\n'.format(
@@ -272,7 +260,7 @@ def test_not_a_virtualenv_missing_site_packages(fake_venv, capsys):
 
 def test_not_a_virtualenv_missing_bindir(fake_venv, capsys):
     fake_venv.join('bin').remove()
-    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    ret = virtualenv_tools.main((fake_venv.strpath,))
     out, _ = capsys.readouterr()
     assert ret == 1
     expected = '{} is not a virtualenv: not a directory: {}\n'.format(
@@ -283,7 +271,7 @@ def test_not_a_virtualenv_missing_bindir(fake_venv, capsys):
 
 def test_not_a_virtualenv_missing_activate_file(fake_venv, capsys):
     fake_venv.join('bin/activate').remove()
-    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    ret = virtualenv_tools.main((fake_venv.strpath,))
     out, _ = capsys.readouterr()
     assert ret == 1
     expected = '{} is not a virtualenv: not a file: {}\n'.format(
@@ -294,7 +282,7 @@ def test_not_a_virtualenv_missing_activate_file(fake_venv, capsys):
 
 def test_not_a_virtualenv_missing_versioned_lib_directory(fake_venv, capsys):
     fake_venv.join('lib/python2.7').remove()
-    ret = virtualenv_tools.main(('--update-path=auto', fake_venv.strpath))
+    ret = virtualenv_tools.main((fake_venv.strpath,))
     out, _ = capsys.readouterr()
     assert ret == 1
     expected = '{} is not a virtualenv: not a directory: {}\n'.format(
