@@ -403,6 +403,11 @@ def main(argv=None):
         description='Update paths in a virtualenv before/after moving it.',
         epilog=(
             'To be able to give a virtualenv name, WORKON_HOME variable must be set\n'
+            'Before moving : %(prog)s -u new/path/of/venv old/path/of/venv\n'
+            'Before moving : %(prog)s -u new/path/of/venv old_venv\n'
+            'After moving and in the virtualenv : %(prog)s\n'
+            'After moving : %(prog)s new_venv\n'
+            'After moving : %(prog)s new/path/of/venv.\n'
         ),
         formatter_class=argparse.RawTextHelpFormatter
     )
@@ -411,7 +416,7 @@ def main(argv=None):
         help=(
             'Update the path for all required executables and helper files '
             'that are supported to the new python prefix.\n'
-            'You can set this to "auto" for autodetection.\n'
+            'If omitted, path argument will be used.'
             'If a virtualenv name is given and "WORKON_HOME" is set, it will update'
             'this virtualenv otherwise fallback to path argument.'
         ),
@@ -422,8 +427,8 @@ def main(argv=None):
             'On Windows, a directory pointing to a valid Python installation.\n'
             'On *nux, a valid Python executable.\n'
             'The virtualenv will load standard libraries from here.'
-            'This is needed to update pyvenv.cfg'
-            'If omitted or set to "auto", the default python3 will be used.'
+            'This is needed to update pyvenv.cfg with a non default installation.'
+            'If omitted, the default python will be used.'
         ),
     )
     parser.add_argument(
