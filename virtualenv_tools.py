@@ -391,14 +391,6 @@ def _get_original_state(path, new_path=None):
     )
 
 
-def _get_virtualenv_path(path):
-    workon_home = os.getenv("WORKON_HOME")
-    if workon_home is not None:
-        env_path = os.path.join(workon_home, path)
-        return env_path, True
-    return path, False
-
-
 def main(argv=None):
     parser = argparse.ArgumentParser(
         description='Update paths in a virtualenv before/after moving it.',
