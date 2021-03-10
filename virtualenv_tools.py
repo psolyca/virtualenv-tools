@@ -202,19 +202,14 @@ def update_pyc(filename, new_path):
 def update_pycs(lib_dir, new_path):
     """Walks over all pyc files and updates their paths."""
     def get_new_path(filename):
-        filename = os.path.normpath(filename)
-        return os.path.join(new_path, filename[len(lib_dir) + 1:])
+        filename = Path(os.path.normpath(filename)).name
+        return os.path.join(new_path, filename)
 
-    for dirname, dirnames, filenames in os.walk(lib_dir):
-        for filename in filenames:
-            if (
-                    filename.endswith(('.pyc', '.pyo')) and
-                    # python 2, virtualenv 20.x symlinks os.pyc
-                    not os.path.islink(os.path.join(dirname, filename))
-            ):
-                filename = os.path.join(dirname, filename)
-                local_path = get_new_path(filename)
-                update_pyc(filename, local_path)
+    pycs = Path(lib_dir).glob('**/*.pyc')
+    pyos = Path(lib_dir).glob('**/*.pyo')
+    for pyc in [*pycs, *pyos]:
+        local_path = get_new_path(pyc)
+        update_pyc(pyc, local_path)
 
 
 def _update_pth_file(pth_filename, orig_path, is_pypy):
