@@ -35,8 +35,7 @@ ACTIVATION_SCRIPTS = [
     'activate.ps1',
     'activate_this.py'
 ]
-_pybin_match = re.compile(r'^python\d+\.\d+$')
-_pypy_match = re.compile(r'^\d+.\d+$')
+matcher = re.compile(r'^((?:python)*\d*\.*\d*(?:\.exe)*)$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |set \"|)VIRTUAL_ENV[ =][\'\"]*(.*?)[\'\"]*\s*$'
 )
@@ -354,7 +353,6 @@ def _get_original_state(path, new_path=None):
     if IS_WINDOWS:  # pragma: no cover (Windows only)
         lib_dir = base_lib_dir
     else:
-        matcher = _pypy_match if is_pypy else _pybin_match
         lib_dirs = [
             os.path.join(base_lib_dir, potential_lib_dir)
             for potential_lib_dir in os.listdir(base_lib_dir)
