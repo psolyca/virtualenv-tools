@@ -18,6 +18,7 @@ import marshal
 import os
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from types import CodeType
@@ -305,6 +306,47 @@ def get_orig_path(venv_path):
             )
 
 
+PyInst = collections.namedtuple(
+    'PyInst', (
+        'path',
+        'bin_dir',
+        'lib_dirs',
+        'site_packages',
+        'is_pypy',
+    ),
+)
+
+
+def _get_main_state(executable):
+    """Get the data folder of the executable"""
+    exe = subprocess.check_output((
+        "{}".format(executable),
+        '-c',
+        'import sys; print(sys.executable)',
+    )).decode('UTF-8').strip()
+    exe = Path(exe).resolve()
+
+    path = exe.parent
+    is_pypy = os.path.isdir(os.path.join(path, 'lib_pypy'))
+    base_lib_dir = os.path.join(path, 'lib-python' if is_pypy else 'lib')
+    lib_dir = base_lib_dir
+    bin_dir = os.path.join(path, BIN_DIR)
+
+    site_packages = os.path.join(lib_dir, 'site-packages')
+
+    lib_dirs = [lib_dir]
+    if is_pypy:  # pragma: no cover (pypy only)
+        lib_dirs.append(os.path.join(path, 'lib_pypy'))
+
+    return PyInst(
+        path=str(path),
+        bin_dir=bin_dir,
+        lib_dirs=lib_dirs,
+        site_packages=site_packages,
+        is_pypy=is_pypy,
+    )
+
+
 class NotAVirtualenvError(OSError):
     def __init__(self, *args):
         self.args = args
@@ -367,6 +409,7 @@ def _get_virtualenv_state(path, new_path=None):
     lib_dirs = [lib_dir]
     if is_pypy:  # pragma: no cover (pypy only)
         lib_dirs.append(os.path.join(path, 'lib_pypy'))
+
     return Virtualenv(
         path=new_path if new_path is not None else path,
         bin_dir=bin_dir,
@@ -390,6 +433,16 @@ def main(argv=None):
             'After moving : %(prog)s new/path/of/venv.\n'
         ),
         formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        '-m', '--main',
+        action='store_true',
+        help=(
+            'Update Python home after moving it.'
+            'Portable Python is bad, not recommended and not supported.'
+            'But why not?'
+            'Windows only'
+        )
     )
     parser.add_argument(
         '-u', '--update-path',
@@ -427,13 +480,25 @@ def main(argv=None):
         'path',
         nargs='?',
         help=(
-            'Default to "."'
+            'Virtualenv folder, default to "."\n'
+            'Executable for main update.'
         )
     )
     args = parser.parse_args(argv)
 
     global VERBOSE
     VERBOSE = args.verbose
+
+    if args.main:
+        if IS_WINDOWS:
+            py_inst = _get_main_state(args.path)
+            for lib_dir in [py_inst.bin_dir, *py_inst.lib_dirs]:
+                update_pycs(lib_dir, py_inst.path)
+                update_scripts(py_inst.bin_dir, py_inst.path)
+            print('Updated: %s' % (py_inst.path))
+        else:
+            print("On *nux, Python installation is not hardcoded in binaries")
+        return 0
 
     update_path = args.update_path
     if update_path is not None:
