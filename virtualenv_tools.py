@@ -326,7 +326,7 @@ Virtualenv = collections.namedtuple(
 )
 
 
-def _get_original_state(path, new_path=None):
+def _get_virtualenv_state(path, new_path=None):
     workon_home = os.getenv("WORKON_HOME")
     if workon_home is not None:
         env_path = os.path.join(workon_home, path)
@@ -456,14 +456,14 @@ def main(argv=None):
 
     if args.path is None:
         try:
-            venv = _get_original_state(os.path.abspath('.'))
+            venv = _get_virtualenv_state(os.path.abspath('.'))
         except NotAVirtualenvError:
             parser.print_help()
             raise SystemExit
     else:
         path = _get_realpath(args.path)
         try:
-            venv = _get_original_state(path=path, new_path=update_path)
+            venv = _get_virtualenv_state(path=path, new_path=update_path)
         except NotAVirtualenvError as e:
             print(e)
             return 1
