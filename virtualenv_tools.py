@@ -85,19 +85,9 @@ def update_activation_script(script_filename, new_path):
             f.writelines(lines)
 
 
-def path_is_within(path, within):
-    try:  # pragma: no cover (Windows only)
-        relpath = os.path.relpath(path, within)
-    except ValueError:  # pragma: no cover (Windows only)
-        return False
-
-    return not relpath.startswith(b".")
-
-
-def update_script(script_filename, old_path, new_path):
+def update_script(script_filename, new_path):
     """Updates shebang lines for actual scripts."""
     filesystem_encoding = sys.getfilesystemencoding()
-    old_path = old_path.encode(filesystem_encoding)
     new_path = new_path.encode(filesystem_encoding)
 
     with open(script_filename, 'rb') as f:
@@ -120,10 +110,14 @@ def update_script(script_filename, old_path, new_path):
         if not os.path.isabs(args[0]):
             continue
 
-        if not path_is_within(args[0], old_path):
+        bin_name = Path(args[0].decode(filesystem_encoding)).name
+        if not matcher.match(bin_name):
             continue
 
-        new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+        new_bin = os.path.join(new_path, bin_name.encode(filesystem_encoding))
+
+        if args[0] == new_bin:
+            continue
 
         line_offset = line_i
         args_offset = shebang_offset + 2
@@ -140,14 +134,14 @@ def update_script(script_filename, old_path, new_path):
         f.writelines(lines)
 
 
-def update_scripts(bin_dir, orig_path, new_path):
+def update_scripts(bin_dir, new_path):
     """Updates all scripts in the bin folder."""
     for fname in os.listdir(bin_dir):
         path = os.path.join(bin_dir, fname)
         if fname in ACTIVATION_SCRIPTS:
             update_activation_script(path, new_path)
         elif os.path.isfile(path):
-            update_script(path, orig_path, new_path)
+            update_script(path, new_path)
 
 
 def update_pyc(filename, new_path):
@@ -289,7 +283,7 @@ def update_paths(venv, base_python_dir=None):
     if base_python_dir:  # pragma: no cover (covered by test_move_with_pyvencfg)
         update_pyvenv_cfg(venv.pyvenv_cfg_file, base_python_dir)
     remove_local(venv.path)
-    update_scripts(venv.bin_dir, venv.orig_path, venv.path)
+    update_scripts(venv.bin_dir, venv.path)
 
 
 def get_orig_path(venv_path):
