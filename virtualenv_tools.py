@@ -41,6 +41,7 @@ _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |set \"|)VIRTUAL_ENV[ =][\'\"]*(.*?)[\'\"]*\s*$'
 )
 VERBOSE = False
+CLEAN = False
 MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
 # In python3.3, a 4 byte "size" hint was added to pyc files
 if sys.version_info >= (3, 3):  # pragma: no cover (PY33+)
@@ -147,13 +148,18 @@ def update_scripts(bin_dir, new_path):
 
 def update_pyc(filename, new_path):
     """Updates the filenames stored in pyc files."""
-    with open(filename, 'rb') as f:
-        magic = f.read(MAGIC_LENGTH)
-        try:
-            code = marshal.load(f)
-        except Exception:
-            print('Error in %s' % filename)
-            raise
+    f = open(filename, 'rb')
+    magic = f.read(MAGIC_LENGTH)
+    try:
+        code = marshal.load(f)
+        f.close()
+    except Exception:
+        print('Error in %s' % filename)
+        f.close()
+        if CLEAN:
+            os.remove(filename)
+            print('Deleted %s' % filename)
+        return
 
     def _make_code(code, filename, consts):
         if sys.version_info[0] == 2:  # pragma: no cover (PY2)
@@ -472,6 +478,14 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        '-c', '--clean',
+        action='store_true',
+        help=(
+            'Clean .pyc and .pyo files which are not the same version of '
+            'the Python of the virtualenv or the main installation.'
+        ),
+    )
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Show a listing of changes'
@@ -488,6 +502,9 @@ def main(argv=None):
 
     global VERBOSE
     VERBOSE = args.verbose
+
+    global CLEAN
+    CLEAN = args.clean
 
     if args.main:
         if IS_WINDOWS:
