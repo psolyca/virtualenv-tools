@@ -429,7 +429,10 @@ def _get_virtualenv_state(path, new_path=None):
 
 def main(argv=None):
     parser = argparse.ArgumentParser(
-        description='Update paths in a virtualenv before/after moving it.',
+        description=(
+            'Update paths in a virtualenv before/after moving it'
+            ' or a Python installation after moving it.'
+        ),
         epilog=(
             'To be able to give a virtualenv name, WORKON_HOME variable must be set\n'
             'Before moving : %(prog)s -u new/path/of/venv old/path/of/venv\n'
@@ -437,6 +440,9 @@ def main(argv=None):
             'After moving and in the virtualenv : %(prog)s\n'
             'After moving : %(prog)s new_venv\n'
             'After moving : %(prog)s new/path/of/venv.\n'
+            '\n'
+            'For main installation, python as executable\n'
+            '%(prog)s -m python'
         ),
         formatter_class=argparse.RawTextHelpFormatter
     )
@@ -482,7 +488,7 @@ def main(argv=None):
         action='store_true',
         help=(
             'Clean .pyc and .pyo files which are not the same version of '
-            'the Python of the virtualenv or the main installation.'
+            'the Python in the virtualenv or the main installation.'
         ),
     )
     parser.add_argument(
