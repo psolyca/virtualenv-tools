@@ -1,92 +1,69 @@
-[![Build Status](https://travis-ci.org/Yelp/virtualenv-tools.svg?branch=master)](https://travis-ci.org/Yelp/virtualenv-tools)
-[![Coverage Status](https://img.shields.io/coveralls/Yelp/virtualenv-tools.svg?branch=master)](https://coveralls.io/r/Yelp/virtualenv-tools)
-[![PyPI version](https://badge.fury.io/py/virtualenv-tools3.svg)](https://pypi.python.org/pypi/virtualenv-tools3)
+[![Build Status](https://travis-ci.com/psolyca/virtualenv-tools.svg?branch=master)](https://travis-ci.com/psolyca/virtualenv-tools)
 
-virtualenv-tools3
---------
+virtualenv-tools-enhanced
+-------------------------
 
-virtualenv-tools3 is a fork of [the original
-virtualenv-tools](https://github.com/fireteam/virtualenv-tools) (now
-unmaintained) which adds support for Python 3, among other things. Full patch
-details are below.
-
-##  yelp patches
-
-### yelp4
-
-* Add python3 support
-* Drop python2.6 support
-* 100% test coverage
-* Removes `$VENV/local` instead of fixing up symlinks
-* Removed `--reinitialize`, instead run `virtualenv $VENV -p $PYTHON`
-* Rewrite .pth files to relative paths
+virtualenv-tools-enhanced is a fork of [
+virtualenv-tools3](https://github.com/Yelp/virtualenv-tools).
 
 
-### yelp3
+## virtualenv-tools-enhanced
 
-* default output much more concise, added a --verbose option
-* improved fault tolerance, in the case of:
-    * corrupt pyc files
-    * broken symlinks
-    * unexpected directories
-* no-changes-needed is a success case (idempotency exits 0)
-
-
-### yelp1
-
-* --update now works more generally and reliably (e.g. virtualenv --python=python2.7)
-
-
-## virtualenv-tools
-
-This repository contains scripts we're using at Fireteam for our
-deployment of Python code.  We're using them in combination with
-salt to build code on one server on a self contained virtualenv
-and then move that over to the destination servers to run.
+This repository contains scripts I am using for my portable environment
+used to develop with VSCodium.
+As the environmnet is portable across different plateforms and computers,
+I need a way to get Python and virtualenv working everywhere.
 
 ### Why not virtualenv --relocatable?
 
-For starters: because it does not work.  relocatable is very
+For starters: because it does not work. Relocatable is very
 limited in what it does and it works at runtime instead of
 making the whole thing actually move to the new location.  We
 ran into a ton of issues with it and it is currently in the
 process of being phased out.
 
+### Why not virtualenv-tools3?
+
+Because of some lack of Windows support.
+Because...
+
 ### Why would I want to use it?
 
-The main reason you want to use this is for build caching.  You
-have one folder where one virtualenv exists, you install the
-latest version of your codebase and all extensions in there, then
-you can make the virtualenv relocate to a target location, put it
-into a tarball, distribute it to all servers and done!
+The main reason you want to use this is simplification.
+No more long options, some more 'usefull' features.
 
-### Example flow:
-
-First time: create the build cache
+### Help :
 
 ```
-$ mkdir /tmp/build-cache
-$ virtualenv --distribute /tmp/build-cache
+usage: virtualenv_tools.py [-h] [-m] [-u UPDATE_PATH] [-b BASE_PYTHON_DIR] [-f] [-c] [-v] [path]
+
+Update paths in a virtualenv before/after moving it or a Python installation after moving it.
+
+positional arguments:
+  path                  Virtualenv folder, default to "."
+                        Executable for main update.
+
+optional arguments:
+  -h, --help            show this help message and exit
+  -m, --main            Update Python home after moving it.Portable Python is bad, not recommended and not supported.But why not?Windows only
+  -u UPDATE_PATH, --update-path UPDATE_PATH
+                        Update the path for all required executables and helper files that are supported to the new python prefix.
+                        If omitted, path argument will be used.If a virtualenv name is given and "WORKON_HOME" is set, it will updatethis virtualenv otherwise fallback to path argument.
+  -b BASE_PYTHON_DIR, --base-python-dir BASE_PYTHON_DIR
+                        On Windows, a directory pointing to a valid Python installation.
+                        On *nux, a valid Python executable.
+                        The virtualenv will load standard libraries from here.This is needed to update pyvenv.cfg with a non default installation.If omitted, the default python will be used.
+  -f, --force           Continue processing even if the original path is the same as the updated path.
+  -c, --clean           Clean .pyc and .pyo files which are not the same version of the Python in the virtualenv or the main installation.
+  -v, --verbose         Show a listing of changes
+
+To be able to give a virtualenv name, WORKON_HOME variable must be set
+Before moving : virtualenv_tools.py -u new/path/of/venv old/path/of/venv
+Before moving : virtualenv_tools.py -u new/path/of/venv old_venv
+After moving and in the virtualenv : virtualenv_tools.py
+After moving : virtualenv_tools.py new_venv
+After moving : virtualenv_tools.py new/path/of/venv.
+
+For main installation, python as executable
+virtualenv_tools.py -m python
 ```
-
-Now every time you build:
-
-```
-$ . /tmp/build-cache/bin/activate
-$ pip install YourApplication
-```
-
-Build done, package up and copy to whatever location you want to have it.
-
-Once unpacked on the target server, use the virtualenv tools to
-update the paths and make the virtualenv magically work in the new
-location.  For instance we deploy things to a path with the
-hash of the commit in:
-
-```
-$ virtualenv-tools --update-path /srv/your-application/<hash>
-```
-
-Compile once, deploy whereever.  Virtualenvs are completely self
-contained.  In order to switch the current version all you need to
-do is to relink the builds.
