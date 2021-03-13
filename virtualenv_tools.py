@@ -18,6 +18,7 @@ import marshal
 import os
 import re
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from types import CodeType
@@ -35,12 +36,12 @@ ACTIVATION_SCRIPTS = [
     'activate.ps1',
     'activate_this.py'
 ]
-_pybin_match = re.compile(r'^python\d+\.\d+$')
-_pypy_match = re.compile(r'^\d+.\d+$')
+matcher = re.compile(r'^((?:python)*\d*\.*\d*(?:\.exe)*)$')
 _activation_path_re = re.compile(
     r'^(?:set -gx |setenv |set \"|)VIRTUAL_ENV[ =][\'\"]*(.*?)[\'\"]*\s*$'
 )
 VERBOSE = False
+CLEAN = False
 MAGIC_LENGTH = 4 + 4  # magic length + 4 byte timestamp
 # In python3.3, a 4 byte "size" hint was added to pyc files
 if sys.version_info >= (3, 3):  # pragma: no cover (PY33+)
@@ -86,19 +87,9 @@ def update_activation_script(script_filename, new_path):
             f.writelines(lines)
 
 
-def path_is_within(path, within):
-    try:  # pragma: no cover (Windows only)
-        relpath = os.path.relpath(path, within)
-    except ValueError:  # pragma: no cover (Windows only)
-        return False
-
-    return not relpath.startswith(b".")
-
-
-def update_script(script_filename, old_path, new_path):
+def update_script(script_filename, new_path):
     """Updates shebang lines for actual scripts."""
     filesystem_encoding = sys.getfilesystemencoding()
-    old_path = old_path.encode(filesystem_encoding)
     new_path = new_path.encode(filesystem_encoding)
 
     with open(script_filename, 'rb') as f:
@@ -121,10 +112,14 @@ def update_script(script_filename, old_path, new_path):
         if not os.path.isabs(args[0]):
             continue
 
-        if not path_is_within(args[0], old_path):
+        bin_name = Path(args[0].decode(filesystem_encoding)).name
+        if not matcher.match(bin_name):  # pragma: no cover
             continue
 
-        new_bin = os.path.join(new_path, os.path.relpath(args[0], old_path))
+        new_bin = os.path.join(new_path, bin_name.encode(filesystem_encoding))
+
+        if args[0] == new_bin:
+            continue
 
         line_offset = line_i
         args_offset = shebang_offset + 2
@@ -141,25 +136,30 @@ def update_script(script_filename, old_path, new_path):
         f.writelines(lines)
 
 
-def update_scripts(bin_dir, orig_path, new_path):
+def update_scripts(bin_dir, new_path):
     """Updates all scripts in the bin folder."""
     for fname in os.listdir(bin_dir):
         path = os.path.join(bin_dir, fname)
         if fname in ACTIVATION_SCRIPTS:
             update_activation_script(path, new_path)
         elif os.path.isfile(path):
-            update_script(path, orig_path, new_path)
+            update_script(path, new_path)
 
 
 def update_pyc(filename, new_path):
     """Updates the filenames stored in pyc files."""
-    with open(filename, 'rb') as f:
-        magic = f.read(MAGIC_LENGTH)
-        try:
-            code = marshal.load(f)
-        except Exception:
-            print('Error in %s' % filename)
-            raise
+    f = open(filename, 'rb')
+    magic = f.read(MAGIC_LENGTH)
+    try:
+        code = marshal.load(f)
+        f.close()
+    except Exception:
+        print('Error in %s' % filename)
+        f.close()
+        if CLEAN:
+            os.remove(filename)
+            print('Deleted %s' % filename)
+        return
 
     def _make_code(code, filename, consts):
         if sys.version_info[0] == 2:  # pragma: no cover (PY2)
@@ -202,19 +202,14 @@ def update_pyc(filename, new_path):
 def update_pycs(lib_dir, new_path):
     """Walks over all pyc files and updates their paths."""
     def get_new_path(filename):
-        filename = os.path.normpath(filename)
-        return os.path.join(new_path, filename[len(lib_dir) + 1:])
+        filename = Path(os.path.normpath(filename)).name
+        return os.path.join(new_path, filename)
 
-    for dirname, dirnames, filenames in os.walk(lib_dir):
-        for filename in filenames:
-            if (
-                    filename.endswith(('.pyc', '.pyo')) and
-                    # python 2, virtualenv 20.x symlinks os.pyc
-                    not os.path.islink(os.path.join(dirname, filename))
-            ):
-                filename = os.path.join(dirname, filename)
-                local_path = get_new_path(filename)
-                update_pyc(filename, local_path)
+    pycs = Path(lib_dir).glob('**/*.pyc')
+    pyos = Path(lib_dir).glob('**/*.pyo')
+    for pyc in [*pycs, *pyos]:
+        local_path = get_new_path(pyc)
+        update_pyc(pyc, local_path)
 
 
 def _update_pth_file(pth_filename, orig_path, is_pypy):
@@ -295,7 +290,7 @@ def update_paths(venv, base_python_dir=None):
     if base_python_dir:  # pragma: no cover (covered by test_move_with_pyvencfg)
         update_pyvenv_cfg(venv.pyvenv_cfg_file, base_python_dir)
     remove_local(venv.path)
-    update_scripts(venv.bin_dir, venv.orig_path, venv.path)
+    update_scripts(venv.bin_dir, venv.path)
 
 
 def get_orig_path(venv_path):
@@ -315,6 +310,47 @@ def get_orig_path(venv_path):
                 'Could not find VIRTUAL_ENV= in activation script: %s' %
                 activate_path
             )
+
+
+PyInst = collections.namedtuple(
+    'PyInst', (
+        'path',
+        'bin_dir',
+        'lib_dirs',
+        'site_packages',
+        'is_pypy',
+    ),
+)
+
+
+def _get_main_state(executable):  # pragma: no cover (Windows only)
+    """Get the data folder of the executable"""
+    exe = subprocess.check_output((
+        "{}".format(executable),
+        '-c',
+        'import sys; print(sys.executable)',
+    )).decode('UTF-8').strip()
+    exe = Path(exe).resolve()
+
+    path = exe.parent
+    is_pypy = os.path.isdir(os.path.join(path, 'lib_pypy'))
+    base_lib_dir = os.path.join(path, 'lib-python' if is_pypy else 'lib')
+    lib_dir = base_lib_dir
+    bin_dir = os.path.join(path, BIN_DIR)
+
+    site_packages = os.path.join(lib_dir, 'site-packages')
+
+    lib_dirs = [lib_dir]
+    if is_pypy:  # pragma: no cover (pypy only)
+        lib_dirs.append(os.path.join(path, 'lib_pypy'))
+
+    return PyInst(
+        path=str(path),
+        bin_dir=bin_dir,
+        lib_dirs=lib_dirs,
+        site_packages=site_packages,
+        is_pypy=is_pypy,
+    )
 
 
 class NotAVirtualenvError(OSError):
@@ -338,7 +374,7 @@ Virtualenv = collections.namedtuple(
 )
 
 
-def _get_original_state(path, new_path=None):
+def _get_virtualenv_state(path, new_path=None):
     workon_home = os.getenv("WORKON_HOME")
     if workon_home is not None:
         env_path = os.path.join(workon_home, path)
@@ -359,7 +395,6 @@ def _get_original_state(path, new_path=None):
     if IS_WINDOWS:  # pragma: no cover (Windows only)
         lib_dir = base_lib_dir
     else:
-        matcher = _pypy_match if is_pypy else _pybin_match
         lib_dirs = [
             os.path.join(base_lib_dir, potential_lib_dir)
             for potential_lib_dir in os.listdir(base_lib_dir)
@@ -380,6 +415,7 @@ def _get_original_state(path, new_path=None):
     lib_dirs = [lib_dir]
     if is_pypy:  # pragma: no cover (pypy only)
         lib_dirs.append(os.path.join(path, 'lib_pypy'))
+
     return Virtualenv(
         path=new_path if new_path is not None else path,
         bin_dir=bin_dir,
@@ -403,6 +439,16 @@ def main(argv=None):
             'After moving : %(prog)s new/path/of/venv.\n'
         ),
         formatter_class=argparse.RawTextHelpFormatter
+    )
+    parser.add_argument(
+        '-m', '--main',
+        action='store_true',
+        help=(
+            'Update Python home after moving it.'
+            'Portable Python is bad, not recommended and not supported.'
+            'But why not?'
+            'Windows only'
+        )
     )
     parser.add_argument(
         '-u', '--update-path',
@@ -432,6 +478,14 @@ def main(argv=None):
         ),
     )
     parser.add_argument(
+        '-c', '--clean',
+        action='store_true',
+        help=(
+            'Clean .pyc and .pyo files which are not the same version of '
+            'the Python of the virtualenv or the main installation.'
+        ),
+    )
+    parser.add_argument(
         '-v', '--verbose',
         action='store_true',
         help='Show a listing of changes'
@@ -440,13 +494,28 @@ def main(argv=None):
         'path',
         nargs='?',
         help=(
-            'Default to "."'
+            'Virtualenv folder, default to "."\n'
+            'Executable for main update.'
         )
     )
     args = parser.parse_args(argv)
 
     global VERBOSE
     VERBOSE = args.verbose
+
+    global CLEAN
+    CLEAN = args.clean
+
+    if args.main:
+        if IS_WINDOWS:  # pragma: no cover (Windows only)
+            py_inst = _get_main_state(args.path)
+            for lib_dir in [py_inst.bin_dir, *py_inst.lib_dirs]:
+                update_pycs(lib_dir, py_inst.path)
+                update_scripts(py_inst.bin_dir, py_inst.path)
+            print('Updated: %s' % (py_inst.path))
+        else:
+            print("On *nux, Python installation is not hardcoded in binaries")
+        return 0
 
     update_path = args.update_path
     if update_path is not None:
@@ -469,14 +538,14 @@ def main(argv=None):
 
     if args.path is None:
         try:
-            venv = _get_original_state(os.path.abspath('.'))
+            venv = _get_virtualenv_state(os.path.abspath('.'))
         except NotAVirtualenvError:
             parser.print_help()
             raise SystemExit
     else:
         path = _get_realpath(args.path)
         try:
-            venv = _get_original_state(path=path, new_path=update_path)
+            venv = _get_virtualenv_state(path=path, new_path=update_path)
         except NotAVirtualenvError as e:
             print(e)
             return 1
