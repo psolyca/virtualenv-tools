@@ -113,7 +113,7 @@ def update_script(script_filename, new_path):
             continue
 
         bin_name = Path(args[0].decode(filesystem_encoding)).name
-        if not matcher.match(bin_name):
+        if not matcher.match(bin_name):  # pragma: no cover
             continue
 
         new_bin = os.path.join(new_path, bin_name.encode(filesystem_encoding))
@@ -323,7 +323,7 @@ PyInst = collections.namedtuple(
 )
 
 
-def _get_main_state(executable):
+def _get_main_state(executable):  # pragma: no cover (Windows only)
     """Get the data folder of the executable"""
     exe = subprocess.check_output((
         "{}".format(executable),
@@ -507,7 +507,7 @@ def main(argv=None):
     CLEAN = args.clean
 
     if args.main:
-        if IS_WINDOWS:
+        if IS_WINDOWS:  # pragma: no cover (Windows only)
             py_inst = _get_main_state(args.path)
             for lib_dir in [py_inst.bin_dir, *py_inst.lib_dirs]:
                 update_pycs(lib_dir, py_inst.path)
