@@ -187,12 +187,10 @@ def test_bad_pyc(venv, capsys):
     libdir = libdir_fmt.format(*sys.version_info[:2])
     bad_pyc = venv.before.join(libdir, 'bad.pyc')
     bad_pyc.write_binary(b'I am a very naughty pyc\n')
-    # Retries on failures as well
-    for _ in range(2):
-        with pytest.raises(ValueError):
-            run(venv.before, venv.after)
-        out, _ = capsys.readouterr()
-        assert out == 'Error in {}\n'.format(bad_pyc.strpath)
+    run(venv.before, venv.after)
+    out, _ = capsys.readouterr()
+    expected = 'Error in {0}\nUpdated: {1} ({1} -> {2})\n'.format(bad_pyc.strpath, venv.before, venv.after)
+    assert out == expected
 
 
 def test_dir_oddities(venv):
